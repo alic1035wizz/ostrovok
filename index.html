@@ -1,0 +1,932 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Островок"><meta name="theme-color" content="#123f5e"></head><body>
+<title>Островок</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800&display=swap">
+<style>
+/* Layout: one-screen portrait game — status strip on top, pixel-art map in the middle, card tray in the thumb zone. One committed sea-and-sand look (no theme switch). */
+:root{
+  --sea:#1d5f8a; --sea-deep:#123f5e; --sand:#e9d29b; --paper:#fbf3df; --ink:#2b2418;
+  --ink-soft:#6f6450; --accent:#e4572e; --good:#2f9e5b; --panel:#fff8ea; --line:#d8c7a0;
+  --g-fields:#d9a521; --g-woods:#3f8a4c; --g-trade:#b5523b; --g-sea:#2f7fb8;
+  --f-ui:"Rubik",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:light;
+}
+html,body{height:100%}
+body{margin:0;background:var(--sea-deep);color:var(--ink);font-family:var(--f-ui);overflow:hidden;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;touch-action:none}
+#app{position:relative;height:100%;display:flex;flex-direction:column;max-width:560px;margin:0 auto}
+.top{display:flex;flex-direction:column;gap:6px;padding:10px 16px 8px;background:var(--panel);border-bottom:3px solid var(--line);z-index:2}
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.stage{font-weight:800;font-size:18px;line-height:1.1;min-width:0}
+.stage small{display:block;font-weight:500;font-size:11.5px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.08em;margin-top:2px}
+.pills{display:flex;gap:6px;flex-shrink:0}
+.pill{display:flex;align-items:center;gap:4px;font-weight:700;font-size:14px;font-variant-numeric:tabular-nums;background:#fff;border:2px solid var(--line);border-radius:999px;padding:3px 9px}
+.pill.season{font-size:12px}
+.bar{position:relative;height:18px;border-radius:9px;background:#efe2c2;overflow:hidden;border:2px solid var(--line)}
+.bar i{position:absolute;inset:0 auto 0 0;width:0;background:linear-gradient(90deg,var(--good),#5cc27f);transition:width .35s}
+.bar span{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums}
+.relics{display:flex;gap:4px;flex-wrap:wrap;min-height:0}
+.relics button{font-size:16px;width:30px;height:28px;border-radius:8px;border:1.5px solid var(--line);background:#fff;padding:0}
+.map{position:relative;flex:1;min-height:0}
+canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.hint{position:absolute;left:50%;top:10px;transform:translateX(-50%);background:rgba(255,248,234,.95);padding:7px 12px;border-radius:999px;font-size:13px;font-weight:500;box-shadow:0 2px 0 rgba(0,0,0,.18);max-width:92%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
+.zoomers{position:absolute;right:12px;bottom:12px;display:flex;flex-direction:column;gap:8px}
+.zoomers button{width:40px;height:40px;border-radius:12px;font-size:20px}
+.tray{background:var(--panel);border-top:3px solid var(--line);padding:8px 16px calc(12px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:8px;z-index:2}
+.cons{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--ink-soft);font-weight:700;min-height:0}
+.cons button{display:flex;gap:4px;align-items:center;padding:4px 9px;border-radius:999px;border:2px solid var(--line);background:#fff;font-size:13px;font-weight:700}
+.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.card{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px;border-radius:14px;border:2px solid var(--line);background:#fff;min-width:0;text-align:center}
+.card .em{font-size:28px;line-height:1.1}
+.card .nm{font-size:12.5px;font-weight:700;line-height:1.15;min-height:2.3em;display:flex;align-items:center}
+.card .gd{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;font-weight:700;padding:2px 7px;border-radius:999px;color:#fff}
+.card.sel{border-color:var(--accent);box-shadow:0 0 0 3px rgba(228,87,46,.25);transform:translateY(-3px)}
+.card .info{position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;border:1.5px solid var(--line);background:var(--panel);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;color:var(--ink-soft)}
+.actions{display:flex;gap:8px}
+button{font:inherit;cursor:pointer;color:var(--ink)}
+.btn{flex:1;min-height:44px;border-radius:12px;border:2px solid var(--line);background:#fff;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;gap:6px;padding:0 8px}
+.btn.primary{background:var(--accent);border-color:#b8401d;color:#fff}
+.btn.on{background:#ffe3d6;border-color:var(--accent)}
+.btn:disabled{opacity:.45;cursor:default}
+.btn .n{font-variant-numeric:tabular-nums;background:var(--paper);border-radius:999px;padding:1px 7px;font-size:12px}
+.btn.primary .n{background:rgba(255,255,255,.25)}
+button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.ov{position:absolute;inset:0;background:rgba(10,32,50,.6);display:flex;align-items:center;justify-content:center;padding:16px;z-index:5}
+.sheet{background:var(--panel);border-radius:20px;border:3px solid var(--line);padding:20px 18px;width:100%;max-width:440px;display:flex;flex-direction:column;gap:12px;max-height:100%;overflow:auto}
+.sheet h2{margin:0;font-size:23px;font-weight:800;text-wrap:balance}
+.sheet p{margin:0;line-height:1.45;color:var(--ink-soft);font-size:14.5px}
+.logo{font-size:46px;font-weight:800;line-height:1}
+.logo em{font-style:normal;color:var(--accent)}
+.meta{display:flex;gap:8px;flex-wrap:wrap}
+.meta span{font-size:12.5px;font-weight:700;background:#fff;border:2px solid var(--line);border-radius:999px;padding:3px 10px;font-variant-numeric:tabular-nums}
+.rules{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;list-style:none}
+.rules li{display:flex;gap:10px;align-items:flex-start;font-size:14px;line-height:1.4}
+.rules li b{flex:0 0 24px;height:24px;border-radius:50%;background:var(--sand);display:flex;align-items:center;justify-content:center;font-size:13px}
+.choices{display:flex;flex-direction:column;gap:8px}
+.choice{display:flex;gap:12px;align-items:center;text-align:left;padding:11px 12px;border-radius:14px;border:2px solid var(--line);background:#fff;font-size:13.5px;line-height:1.35}
+.choice .em{font-size:26px;flex-shrink:0}
+.choice strong{display:block;font-size:15px}
+.choice .price{margin-left:auto;font-weight:800;font-variant-numeric:tabular-nums;flex-shrink:0}
+.choice.picked{border-color:var(--accent);background:#fff1ea}
+.choice:disabled{opacity:.45}
+.guilds{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.gcard{display:flex;flex-direction:column;gap:4px;padding:12px;border-radius:14px;border:3px solid var(--line);background:#fff;text-align:left;font-size:12.5px;line-height:1.35;color:var(--ink-soft)}
+.gcard strong{font-size:16px;color:var(--ink)}
+.gcard .ems{font-size:20px;letter-spacing:2px}
+.gcard.picked{border-color:var(--accent);background:#fff1ea}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.stat{background:#fff;border:2px solid var(--line);border-radius:12px;padding:8px 10px}
+.stat span{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-soft);font-weight:700}
+.stat b{font-size:20px;font-variant-numeric:tabular-nums}
+.tip .head{display:flex;gap:10px;align-items:center}
+.tip .em{font-size:34px}
+.tag{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#fff;padding:2px 8px;border-radius:999px;align-self:flex-start}
+.btnrow{display:flex;gap:8px}
+.toast{position:absolute;left:50%;bottom:calc(170px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:8px 14px;border-radius:999px;font-size:13px;font-weight:500;z-index:6;pointer-events:none;white-space:nowrap}
+.bar b{position:absolute;inset:0 auto 0 0;width:0;background:repeating-linear-gradient(45deg,rgba(47,158,91,.32) 0 6px,rgba(47,158,91,.14) 6px 12px);transition:width .35s}
+.lv{display:flex;gap:3px}.lv i{width:14px;height:14px;border-radius:3px;background:#e6d6b0;border:1.5px solid #cdb788}
+.lv i.on{background:#ffd34d;border-color:#d9a521;box-shadow:0 0 6px rgba(255,200,60,.8)}
+.gp{display:flex;gap:12px;align-items:flex-start;padding:10px;border-radius:14px;border:2px solid var(--line);background:#fff}
+.gp .shield{flex:0 0 50px;height:58px;border-radius:10px 10px 25px 25px;display:flex;align-items:center;justify-content:center;font-size:26px;box-shadow:inset 0 -4px 0 rgba(0,0,0,.22),inset 0 0 0 3px rgba(255,255,255,.25)}
+.gp.locked{background:#f3ead6}.gp.locked .shield{background:#a39b8a;filter:grayscale(1)}
+.gp .body{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px}
+.gp .ttl{display:flex;justify-content:space-between;align-items:center;gap:8px}.gp .ttl strong{font-size:16px}
+.gp small,.rank span{color:var(--ink-soft);font-size:12px;font-weight:700;line-height:1.3}
+.gp .bl{font-size:19px;letter-spacing:1px}.gp .bl .q{opacity:.4;filter:grayscale(1)}
+.xp{position:relative;height:10px;border-radius:5px;background:#efe2c2;overflow:hidden;border:1.5px solid var(--line)}
+.xp i{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,#d9a521,#ffd34d);transition:width 1.1s cubic-bezier(.2,.8,.2,1)}
+.segs{display:grid;grid-template-columns:repeat(10,1fr);gap:3px;margin:3px 0}.segs i{height:11px;border-radius:3px;background:#efe2c2;border:1.5px solid var(--line)}.segs i.on{background:#ffd34d;border-color:#d9a521}
+.rank{display:flex;gap:10px;align-items:center;background:#fff;border:2px solid var(--line);border-radius:14px;padding:10px}
+.rank .num{flex:0 0 42px;height:42px;border-radius:50%;background:#7a4a24;color:#ffd34d;font-weight:800;font-size:18px;display:flex;align-items:center;justify-content:center;border:3px solid #d9a521}
+.rank b{font-size:16px;display:block}
+.score{display:flex;flex-direction:column;gap:5px;background:#fff;border:2px solid var(--line);border-radius:12px;padding:10px 12px}
+.score div{display:flex;justify-content:space-between;gap:8px;font-size:14px;font-variant-numeric:tabular-nums}.score div b{color:var(--good);white-space:nowrap}
+.score .tot{border-top:2px dashed var(--line);padding-top:7px;margin-top:2px;font-weight:800;font-size:16px}
+.skills{display:flex;flex-direction:column;gap:8px}
+.skill{display:flex;gap:10px;align-items:center;padding:10px;border-radius:14px;border:2px solid var(--line);background:#fff;font-size:13px;line-height:1.35;color:var(--ink-soft)}
+.skill strong{display:block;color:var(--ink);font-size:15px}.skill .em{font-size:26px;flex-shrink:0}.skill.locked{opacity:.5}
+.skill .pts{margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0}
+.skill .pts .btn{flex:none;min-height:34px;padding:0 14px;font-size:18px}
+.gcard:disabled{opacity:.6;filter:grayscale(.85);cursor:default}.gcard .lk{font-weight:700;color:var(--accent)}
+.unl{display:flex;flex-direction:column;align-items:center;gap:10px;padding:18px 14px;border-radius:16px;background:linear-gradient(#c99463,#a56c3c);color:#fff;text-align:center;border:3px solid #7a4a24;box-shadow:inset 0 0 0 3px rgba(255,255,255,.15)}
+.unl .big{font-size:60px;line-height:1;filter:drop-shadow(0 4px 0 rgba(0,0,0,.25));animation:pop .5s}
+.unl h3{margin:0;font-size:24px;text-shadow:0 2px 0 rgba(0,0,0,.3)}
+.unl p{color:#3a2a18;background:#fbf0d6;border-radius:10px;padding:10px 12px;margin:0;text-align:left;width:100%;box-sizing:border-box;font-size:14px;line-height:1.4}
+.dots{display:flex;gap:6px;justify-content:center}.dots i{width:8px;height:8px;border-radius:50%;background:var(--line)}.dots i.on{background:var(--accent)}
+#menuBtn{font-size:16px;padding:3px 10px;cursor:pointer}
+.quest{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:var(--ink-soft);line-height:1.25}
+.quest .qb{flex-shrink:0;font-variant-numeric:tabular-nums;background:#fff;border:2px solid var(--line);border-radius:999px;padding:1px 8px;color:var(--ink)}
+.quest.done{color:var(--good)}.quest.done .qb{border-color:var(--good)}
+.coach{position:absolute;left:12px;right:12px;z-index:4;background:#2b2418;color:#fbf3df;border-radius:14px;padding:12px 14px;font-size:14px;line-height:1.4;box-shadow:0 6px 18px rgba(0,0,0,.35);display:flex;flex-direction:column;gap:8px;animation:pop .35s}
+.coach{pointer-events:none}.coach .btn{pointer-events:auto}
+.coach.top{top:56px}.coach{font-size:13.5px}
+.adbox{aspect-ratio:16/9;border-radius:14px;background:repeating-linear-gradient(45deg,#26323d 0 14px,#2d3b48 14px 28px);color:#cfd8e0;display:flex;align-items:center;justify-content:center;text-align:center;font-weight:700;font-size:14px;padding:12px}
+.plus{background:linear-gradient(135deg,#fff3c9,#ffe08a);border-color:#d9a521}.coach.bot{bottom:12px}
+.coach b{color:#ffd34d}.coach .btn{flex:none;min-height:36px;align-self:flex-end;padding:0 16px;background:#ffd34d;border-color:#d9a521}
+.coach .stp{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#bfb29a;font-weight:700}
+.pulse{animation:pulse 1.1s infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(228,87,46,.55)}50%{box-shadow:0 0 0 7px rgba(228,87,46,0)}}
+.achs{display:flex;flex-direction:column;gap:6px}
+.ach{display:flex;gap:10px;align-items:center;padding:8px 10px;border-radius:12px;border:2px solid var(--line);background:#fff;font-size:12.5px;color:var(--ink-soft);line-height:1.3}
+.ach strong{display:block;font-size:14.5px;color:var(--ink)}.ach .em{font-size:24px;width:30px;text-align:center;flex-shrink:0}
+.ach.off{background:#f3ead6}.ach.off .em{filter:grayscale(1);opacity:.45}.ach .rw{margin-left:auto;font-weight:800;color:var(--good);flex-shrink:0}
+@keyframes pop{0%{transform:scale(.3)}70%{transform:scale(1.15)}100%{transform:scale(1)}}
+.zoomers .btn.on{background:#ffe3d6}
+@media (prefers-reduced-motion:reduce){.bar i,.bar b,.xp i{transition:none}.card.sel{transform:none}.unl .big{animation:none}}
+</style>
+
+<div id="app">
+  <div class="top">
+    <div class="row">
+      <div class="stage" id="stageName">Стоянка<small id="stageNum">этап 1 из 8</small></div>
+      <div class="pills">
+        <button class="pill" id="menuBtn" aria-label="Меню">☰</button>
+        <span class="pill season" id="season">🌸 Весна</span>
+        <span class="pill" title="Монеты">💰 <b id="coins">0</b></span>
+        <span class="pill" title="Недель осталось">⏳ <b id="weeks">8</b></span>
+      </div>
+    </div>
+    <div class="bar" title="Штриховка — прогноз до конца этапа при текущем доходе"><b id="barProj"></b><i id="barFill"></i><span id="barText">0 / 200</span></div>
+    <div class="quest" id="quest"></div>
+    <div class="relics" id="relics"></div>
+  </div>
+  <div class="map" id="mapWrap">
+    <canvas id="cv"></canvas>
+    <div class="hint" id="hint">Выберите здание внизу</div>
+    <div id="coach"></div>
+    <div class="zoomers">
+      <button class="btn" id="zNum" aria-label="Очки зданий на карте" title="Очки зданий на карте">🔢</button>
+      <button class="btn" id="zIn" aria-label="Приблизить">+</button>
+      <button class="btn" id="zOut" aria-label="Отдалить">−</button>
+    </div>
+  </div>
+  <div class="tray">
+    <div class="cons" id="cons"></div>
+    <div class="cards" id="cards"></div>
+    <div class="actions" id="actions"></div>
+  </div>
+  <div id="overlay"></div>
+  <div class="toast" id="toast" hidden></div>
+</div>
+
+<script>
+(() => {
+'use strict';
+// =============== CONTENT ===============
+const STAGES=[['Стоянка',200],['Хутор',600],['Деревня',1300],['Посёлок',2400],['Городок',4000],['Город',6500],['Портовый город',10000],['Столица',15000]];
+const WEEKS=8;
+const SEASONS=[{n:'Весна',em:'🌸',d:'цветы считаются за два'},{n:'Лето',em:'☀️',d:'здания Моря ×1,5'},{n:'Осень',em:'🍂',d:'здания Полей ×1,5'},{n:'Зима',em:'❄️',d:'здания Лесов ×1,5'}];
+const GUILD={
+  fields:{name:'Поля',color:'#d9a521',roof:'#c0392b',d:'Поля, колодцы и пасеки. Растут вместе: чем больше полей рядом, тем лучше.'},
+  woods:{name:'Леса',color:'#3f8a4c',roof:'#5a3a22',d:'Очки за деревья и цветы. Хорошо там, где густой лес.'},
+  trade:{name:'Торговля',color:'#b5523b',roof:'#7b2d8b',d:'Монеты и очки за плотную застройку любых зданий.'},
+  sea:{name:'Море',color:'#2f7fb8',roof:'#1f4e79',d:'Строится на берегу. Очки за воду, песок и другие морские здания.'}
+};
+const B={
+  field:{n:'Пшеничное поле',em:'🌾',g:'fields',on:'land',r:1,likes:['field'],food:1,t:'Каждую неделю: 5 очков и +5 за каждое соседнее поле.'},
+  well:{n:'Колодец',em:'⛲',g:'fields',on:'any',r:1,likes:['field'],t:'Пассивно: соседние поля приносят ×2.'},
+  mill:{n:'Мельница',em:'🌬️',g:'fields',on:'land',r:2,likes:['field'],t:'Каждую неделю: +8 за каждое поле в радиусе 2.'},
+  apiary:{n:'Пасека',em:'🐝',g:'fields',on:'land',r:2,likes:['flower'],food:1,t:'При постройке: +15 за каждый цветок в радиусе 2. Каждую неделю: +4 за цветок.'},
+  barn:{n:'Амбар',em:'🏚️',g:'fields',on:'land',r:0,likes:['g:fields'],t:'Каждую неделю: +3 за каждое здание Полей на всём острове.'},
+  scarecrow:{n:'Пугало',em:'👒',g:'fields',on:'land',r:1,likes:['field'],t:'Каждую неделю: +7 за каждое соседнее поле.'},
+  lodge:{n:'Хижина лесника',em:'🏡',g:'woods',on:'land',r:2,likes:['tree'],t:'Каждую неделю: +6 за каждое дерево в радиусе 2.'},
+  sawmill:{n:'Лесопилка',em:'🔨',g:'woods',on:'any',r:1,likes:['tree'],t:'Раз в 2 недели: +18 за каждое соседнее дерево.'},
+  herbalist:{n:'Травница',em:'🌿',g:'woods',on:'land',r:2,likes:['flower'],t:'При постройке: +20 за каждый цветок в радиусе 2. Каждую неделю: +3 за цветок.'},
+  nursery:{n:'Питомник',em:'🌱',g:'woods',on:'land',r:1,likes:['tree'],t:'При постройке сажает до 2 деревьев рядом. Каждую неделю: +4 за соседнее дерево.'},
+  tower:{n:'Охотничья вышка',em:'🦌',g:'woods',on:'land',r:3,likes:['tree'],t:'Каждую неделю: +4 за каждое дерево в радиусе 3.'},
+  grove:{n:'Священная роща',em:'🍃',g:'woods',on:'land',r:1,likes:['tree','flower'],t:'Каждую неделю: +10 за соседнее дерево, ×2 если рядом цветок.'},
+  market:{n:'Рынок',em:'🏪',g:'trade',on:'any',r:1,likes:['building'],t:'Каждую неделю: +5 за каждое соседнее здание.'},
+  tavern:{n:'Таверна',em:'🍺',g:'trade',on:'any',r:1,likes:['food'],t:'Каждую неделю: 1 монета и +8 за каждое соседнее здание с едой (поле, пасека, лодка, солеварня).'},
+  caravan:{n:'Караван-сарай',em:'🐫',g:'trade',on:'any',r:3,likes:['building'],t:'Каждую неделю: +2 за каждое здание в радиусе 3.'},
+  bank:{n:'Банк',em:'🏦',g:'trade',on:'land',r:0,likes:[],t:'Каждую неделю: +3 очка за каждую вашу монету (не больше 90).'},
+  fair:{n:'Ярмарка',em:'🎪',g:'trade',on:'land',r:2,likes:['building'],t:'Раз в 3 недели: +14 за каждое здание в радиусе 2.'},
+  warehouse:{n:'Склад',em:'📦',g:'trade',on:'any',r:1,likes:['building'],t:'Пассивно: каждое соседнее здание получает +4 очка в неделю.'},
+  fishboat:{n:'Рыбацкая лодка',em:'🛶',g:'sea',on:'coast',r:1,likes:['sea'],food:1,t:'Каждую неделю: +6 за каждую соседнюю клетку моря.'},
+  pier:{n:'Причал',em:'⚓',g:'sea',on:'coast',r:2,likes:['g:sea'],t:'Каждую неделю: +7 за каждое здание Моря в радиусе 2.'},
+  lighthouse:{n:'Маяк',em:'🗼',g:'sea',on:'coast',r:2,likes:['sea'],t:'Каждую неделю: +3 за каждую клетку моря в радиусе 2.'},
+  shipyard:{n:'Верфь',em:'⛵',g:'sea',on:'coast',r:2,likes:['tree','g:sea'],t:'Каждую неделю: +4 за дерево в радиусе 2 и +5 за соседнее здание Моря.'},
+  saltworks:{n:'Солеварня',em:'🧂',g:'sea',on:'coast',r:1,likes:['sand'],food:1,t:'Каждую неделю: +6 за каждую соседнюю клетку песка.'},
+  pearl:{n:'Жемчужная отмель',em:'🐚',g:'sea',on:'coast',r:1,likes:['sea'],t:'При постройке: 1 монета за соседнюю клетку моря. Каждую неделю: +4 за неё.'}
+};
+const RELICS={
+  sickle:{n:'Серп',em:'🌙',t:'Здания Полей приносят ×1,25.',p:8},
+  axe:{n:'Топор',em:'⚒️',t:'Здания Лесов приносят ×1,25.',p:8},
+  scales:{n:'Весы',em:'⚖️',t:'Здания Торговли приносят ×1,25.',p:8},
+  net:{n:'Сеть',em:'🎣',t:'Здания Моря приносят ×1,25.',p:8},
+  can:{n:'Лейка',em:'🚿',t:'Цветы всегда считаются за два.',p:7},
+  piggy:{n:'Копилка',em:'🐷',t:'+1 монета каждую неделю.',p:6},
+  dice:{n:'Счастливая кость',em:'🎲',t:'+1 переброс в начале каждого этапа.',p:6},
+  map:{n:'Карта сокровищ',em:'🗺️',t:'+3 монеты за каждый пройденный этап.',p:6}
+};
+const CONS={
+  saplings:{n:'Саженцы',em:'🌳',t:'3 дерева вырастают на свободных клетках луга.',p:3},
+  seeds:{n:'Семена цветов',em:'🌸',t:'3 цветка вырастают на свободных клетках луга.',p:3},
+  dynamite:{n:'Динамит',em:'🧨',t:'+2 сноса.',p:3},
+  feast:{n:'Праздник',em:'🎉',t:'Следующая неделя приносит ×2 очков.',p:5},
+  bones:{n:'Кости',em:'🎲',t:'+2 переброса.',p:3}
+};
+const W=12,H=16,T=48,P=16; // tiles, tile size in world px, sprite pixels per tile
+
+// =============== META PROGRESSION ===============
+const GEM={fields:'🌾',woods:'🌲',trade:'⚖️',sea:'⚓'};
+const GXP=[0,400,1200,3000,6000];             // guild XP needed for levels 1..5
+const RANKS=[['Бродяга',0],['Селянин',30],['Староста',80],['Мастер',160],['Зодчий',280],['Градоначальник',450],['Наместник',700],['Губернатор',1000],['Король',1400],['Легенда',2000]];
+const GLOCK={
+  trade:{need:60,cur:()=>PROF.coinsEarned,txt:n=>'Заработайте ещё '+n+' 💰 в забегах, чтобы открыть'},
+  sea:{need:40,cur:()=>PROF.totalBuilt,txt:n=>'Постройте ещё '+n+' зданий, чтобы открыть'}
+};
+const SKILLS={
+  reroll:{n:'Запасливый',em:'🎲',max:2,rank:2,t:'+1 переброс в начале забега.'},
+  remove:{n:'Подрывник',em:'⛏️',max:2,rank:2,t:'+1 снос в начале забега.'},
+  coins:{n:'Казначей',em:'💰',max:2,rank:2,t:'+3 монеты в начале забега.'},
+  garden:{n:'Садовник',em:'🌼',max:2,rank:3,t:'+3 цветка на острове в начале забега.'},
+  forest:{n:'Лесник',em:'🌲',max:2,rank:3,t:'+3 дерева на острове в начале забега.'},
+  trader:{n:'Торговец',em:'🏷️',max:2,rank:4,t:'Всё в лавке дешевле на 1 💰.'},
+  combo:{n:'Мастер комбо',em:'✨',max:3,rank:4,t:'Все здания приносят ×1,05 очков.'},
+  summer:{n:'Долгое лето',em:'☀️',max:1,rank:6,t:'+1 неделя на каждом этапе.'}
+};
+const gBlds=g=>Object.keys(B).filter(k=>B[k].g===g);
+const gLevel=g=>{const x=PROF.gxp[g]||0;let l=0;for(const t of GXP)if(x>=t)l++;return l};
+const gOpen=(g,lv)=>gBlds(g).slice(0,Math.min(6,2+(lv==null?gLevel(g):lv)));
+const gUnlocked=g=>!GLOCK[g]||GLOCK[g].cur()>=GLOCK[g].need;
+const rankOf=f=>{let r=0;RANKS.forEach((x,i)=>{if(f>=x[1])r=i});return r};
+const spTotal=()=>rankOf(PROF.fame), spUsed=()=>Object.values(PROF.skills).reduce((a,b)=>a+b,0);
+const sk=id=>(S&&S.sk&&S.sk[id])||0;
+const weeksPer=()=>WEEKS+sk('summer');
+function addCoins(n){S.coins+=n;S.earned=(S.earned||0)+n;if(S.coins>=30)ach('rich')}
+const ACH={
+  first:{n:'Первый камень',em:'🧱',t:'Постройте первое здание.',f:5},
+  st1:{n:'Хутор',em:'🏕️',t:'Пройдите этап «Стоянка».',f:5},
+  st3:{n:'Деревня',em:'🏘️',t:'Пройдите этап «Деревня».',f:10},
+  st5:{n:'Городок',em:'🏙️',t:'Пройдите этап «Городок».',f:20},
+  st8:{n:'Столица',em:'🏰',t:'Пройдите все восемь этапов.',f:40},
+  w100:{n:'Урожайная неделя',em:'🌾',t:'Наберите 100 очков за одну неделю.',f:5},
+  w500:{n:'Золотая неделя',em:'🌟',t:'Наберите 500 очков за одну неделю.',f:10},
+  w1500:{n:'Неделя легенд',em:'💫',t:'Наберите 1500 очков за одну неделю.',f:20},
+  combo:{n:'Мастер соседства',em:'🧩',t:'Одно здание принесло 60+ очков за неделю.',f:10},
+  quick:{n:'Блиц',em:'⚡',t:'Пройдите этап, когда осталось 4+ недели.',f:10},
+  noskip:{n:'Без передышки',em:'🔥',t:'Пройдите этап без пропусков недели.',f:5},
+  rich:{n:'Богач',em:'💰',t:'Накопите 30 монет одновременно.',f:10},
+  relics:{n:'Коллекционер',em:'🏺',t:'Соберите 4 реликвии за забег.',f:10},
+  forest:{n:'Заповедник',em:'🌳',t:'40 деревьев на острове одновременно.',f:10},
+  sea:{n:'Морская держава',em:'⚓',t:'6 зданий Моря за один забег.',f:10},
+  quests:{n:'Исполнительный',em:'📜',t:'Выполните 5 заданий этапов.',f:10},
+  guild5:{n:'Мастер гильдии',em:'🏅',t:'Поднимите гильдию до 5 уровня.',f:20},
+  rank5:{n:'Зодчий',em:'👑',t:'Достигните ранга «Зодчий».',f:20},
+  runs10:{n:'Ветеран',em:'🎖️',t:'Сыграйте 10 забегов.',f:15}
+};
+function ach(id){if(!PROF||PROF.ach[id]||!ACH[id])return;PROF.ach[id]=1;PROF.fame+=ACH[id].f;saveProfile();
+  const now=performance.now();ui.achT=Math.max(now+700,(ui.achT||0)+2300);setTimeout(()=>{toast('🏆 Достижение: '+ACH[id].n+' · +'+ACH[id].f+' ⭐');sfx('stage')},ui.achT-now)}
+const QUESTS={
+  guild:{mk:()=>{const g=S.guilds[(R()*S.guilds.length)|0];return {g,need:2+(S.stage>=3?1:0),t:'Постройте здания гильдии «'+GUILD[g].name+'»'}},on:'build',f:(q,k)=>B[k].g===q.g},
+  coast:{mk:()=>({need:2,t:'Постройте здания у воды'}),on:'build',f:(q,k,i)=>coast(S,i)},
+  dense:{mk:()=>({need:2,t:'Постройте вплотную к двум зданиям'}),on:'build',f:(q,k,i)=>cnt(S,i,1,'building').length>=2},
+  nature:{mk:()=>({need:3,t:'Постройте рядом с деревом или цветком'}),on:'build',f:(q,k,i)=>cnt(S,i,1,'tree').length+cnt(S,i,1,'flower').length>0},
+  week:{mk:()=>({need:1,x:Math.max(30,Math.round(goalOf(S.stage)/5/10)*10),t:''}),on:'week',f:(q,k,i,sum)=>sum>=q.x}
+};
+const QREW={c:{t:'+4 💰',a:()=>addCoins(4)},r:{t:'+1 переброс',a:()=>S.rerolls++},m:{t:'+1 снос',a:()=>S.removes++}};
+function newQuest(){const ids=Object.keys(QUESTS).filter(id=>id!=='coast'||S.guilds.includes('sea')||S.stage>0),id=ids[(R()*ids.length)|0],q=QUESTS[id].mk();
+  q.id=id;q.have=0;q.done=false;q.rw='crm'[(R()*3)|0];if(id==='week')q.t='Наберите '+q.x+' очков за одну неделю';S.quest=q}
+function questEv(on,k,i,sum){const q=S.quest;if(!q||q.done||QUESTS[q.id].on!==on)return;if(!QUESTS[q.id].f(q,k,i,sum))return;
+  q.have++;if(q.have>=q.need){q.done=true;QREW[q.rw].a();PROF.quests=(PROF.quests||0)+1;saveProfile();if(PROF.quests>=5)ach('quests');
+    setTimeout(()=>{toast('📜 Задание выполнено: '+QREW[q.rw].t);sfx('stage')},300)}}
+
+// =============== RNG ===============
+function rng(seed){let a=seed>>>0;return()=>{a=a+0x6D2B79F5>>>0;let t=a;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296}}
+function hash(n){let h=(n*2654435761)>>>0;h^=h>>>13;h=Math.imul(h,1274126177)>>>0;h^=h>>>16;return (h>>>0)/4294967296}
+
+// =============== STATE ===============
+let S=null, R=Math.random, PROF=null;   // PROF is loaded after the persistence section (its keys are consts)
+const ui={sel:-1,cursor:-1,removing:false,busy:false,fast:false,floats:[],flash:new Map(),sound:true,nums:true,shown:0,proj:0,tut:-1,achQ:[]};
+
+const idx=(x,y)=>y*W+x, xy=i=>[i%W,(i/W)|0], inMap=(x,y)=>x>=0&&y>=0&&x<W&&y<H;
+function around(i,r){const [x,y]=xy(i),o=[];for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++){if(!dx&&!dy)continue;if(Math.abs(dx)+Math.abs(dy)>r)continue;const nx=x+dx,ny=y+dy;if(inMap(nx,ny))o.push(idx(nx,ny))}return o}
+
+function genMap(seed){
+  for(let a=0;a<60;a++){
+    const r=rng(seed+a*7919),G=5,g=[];for(let i=0;i<(G+1)*(G+1);i++)g.push(r());
+    const val=(x,y)=>{const gx=x/(W-1)*G,gy=y/(H-1)*G,ix=Math.min(G-1,gx|0),iy=Math.min(G-1,gy|0),fx=gx-ix,fy=gy-iy,s=t=>t*t*(3-2*t);
+      const p=g[iy*(G+1)+ix],q=g[iy*(G+1)+ix+1],u=g[(iy+1)*(G+1)+ix],v=g[(iy+1)*(G+1)+ix+1];const top=p+(q-p)*s(fx),bot=u+(v-u)*s(fx);return top+(bot-top)*s(fy)};
+    const terr=new Array(W*H).fill('sea');
+    for(let y=0;y<H;y++)for(let x=0;x<W;x++){const ex=(x-(W-1)/2)/(W/2),ey=(y-(H-1)/2)/(H/2),d=Math.hypot(ex,ey);if(val(x,y)*0.8+0.55-d*0.85>0.33)terr[idx(x,y)]='land'}
+    for(let i=0;i<W*H;i++){const [x,y]=xy(i);if(!x||!y||x===W-1||y===H-1)terr[i]='sea'}
+    const land=terr.filter(t=>t==='land').length;if(land<88||land>134)continue;
+    // single island: flood fill largest component
+    const seen=new Set();let best=[];for(let i=0;i<W*H;i++){if(terr[i]!=='land'||seen.has(i))continue;const st=[i],comp=[];seen.add(i);while(st.length){const c=st.pop();comp.push(c);for(const j of around(c,1))if(terr[j]==='land'&&!seen.has(j)){seen.add(j);st.push(j)}}if(comp.length>best.length)best=comp}
+    if(best.length<land*0.85)continue;
+    const keep=new Set(best);for(let i=0;i<W*H;i++)if(terr[i]==='land'&&!keep.has(i))terr[i]='sea';
+    for(let i=0;i<W*H;i++)if(terr[i]==='land'&&around(i,1).some(j=>terr[j]==='sea'))terr[i]='sand';
+    for(let i=0;i<W*H;i++)if(terr[i]==='land')terr[i]='meadow';
+    const obj=new Array(W*H).fill(null),r2=rng(seed*31+a),G2=[];for(let i=0;i<36;i++)G2.push(r2());
+    for(let i=0;i<W*H;i++){const t=terr[i];if(t==='sea')continue;const [x,y]=xy(i),fz=G2[((y/H*6)|0)*6+((x/W*6)|0)],q=r2();
+      if(t==='meadow'){if(fz>0.42&&q<0.66)obj[i]={k:'tree'};else if(q<0.05)obj[i]={k:'rock'};else if(q<0.2)obj[i]={k:'flower'}}
+      else if(q<0.08)obj[i]={k:'rock'}}
+    return {terr,obj};
+  }
+  return genMap(seed+13);
+}
+
+// =============== RULES ===============
+const seasonOf=st=>((st.stage/2)|0)%4;
+function isK(st,i,k){const o=st.obj[i];
+  if(k==='sea')return st.terr[i]==='sea'; if(k==='sand')return st.terr[i]==='sand'&&!(o&&B[o.k]);
+  if(!o)return false;
+  if(k==='tree'||k==='rock'||k==='flower'||k==='field')return o.k===k;
+  if(k==='building')return !!B[o.k]; if(k==='food')return !!(B[o.k]&&B[o.k].food);
+  if(k.startsWith('g:'))return !!(B[o.k]&&B[o.k].g===k.slice(2));
+  return false}
+const cnt=(st,i,r,k)=>around(i,r).filter(j=>isK(st,j,k));
+const coast=(st,i)=>around(i,1).some(j=>st.terr[j]==='sea');
+function canPlace(st,k,i){if(i<0||st.obj[i])return false;const t=st.terr[i];if(t==='sea')return false;const on=B[k].on;
+  if(on==='coast')return coast(st,i); if(on==='land')return t==='meadow'; return true}
+const flowerW=st=>(seasonOf(st)===0||S.relics.includes('can'))?2:1;
+function guildMult(g){let m=1;const s=seasonOf(S);if((s===1&&g==='sea')||(s===2&&g==='fields')||(s===3&&g==='woods'))m*=1.5;
+  if((g==='fields'&&S.relics.includes('sickle'))||(g==='woods'&&S.relics.includes('axe'))||(g==='trade'&&S.relics.includes('scales'))||(g==='sea'&&S.relics.includes('net')))m*=1.25;
+  if(S.gl&&S.gl[g]>=5)m*=1.1; m*=Math.pow(1.05,sk('combo'));return m}
+
+function weekly(st,i,wk){
+  const o=st.obj[i],k=o.k,fw=flowerW(st);let p=0,tg=[];
+  const L=(r,kind,per)=>{const c=cnt(st,i,r,kind);tg=tg.concat(c);return c.length*per};
+  switch(k){
+    case 'field':{p=(5+L(1,'field',5))*(around(i,1).some(j=>st.obj[j]&&st.obj[j].k==='well')?2:1);break}
+    case 'mill':p=L(2,'field',8);break;
+    case 'apiary':p=L(2,'flower',4*fw);break;
+    case 'barn':{for(let j=0;j<W*H;j++)if(isK(st,j,'g:fields'))tg.push(j);p=3*tg.length;break}
+    case 'scarecrow':p=L(1,'field',7);break;
+    case 'lodge':p=L(2,'tree',6);break;
+    case 'sawmill':{const c=L(1,'tree',18);p=((wk-o.born)%2===1)?c:0;break}
+    case 'herbalist':p=L(2,'flower',3*fw);break;
+    case 'nursery':p=L(1,'tree',4);break;
+    case 'tower':p=L(3,'tree',4);break;
+    case 'grove':{const t=L(1,'tree',10);const f=cnt(st,i,1,'flower');tg=tg.concat(f);p=t*(f.length?2:1);break}
+    case 'market':p=L(1,'building',5);break;
+    case 'tavern':p=L(1,'food',8);break;
+    case 'caravan':p=L(3,'building',2);break;
+    case 'bank':p=Math.min(90,3*S.coins);break;
+    case 'fair':{const c=L(2,'building',14);p=((wk-o.born)%3===2)?c:0;break}
+    case 'fishboat':p=L(1,'sea',6);break;
+    case 'pier':p=L(2,'g:sea',7);break;
+    case 'lighthouse':p=L(2,'sea',3);break;
+    case 'shipyard':p=L(2,'tree',4)+L(1,'g:sea',5);break;
+    case 'saltworks':p=L(1,'sand',6);break;
+    case 'pearl':p=L(1,'sea',4);break;
+  }
+  if(k!=='warehouse'&&k!=='well'){const wh=around(i,1).filter(j=>st.obj[j]&&st.obj[j].k==='warehouse');p+=4*wh.length}
+  p*=guildMult(B[k].g)*(o.up?1.5:1);
+  return {pts:Math.round(p),tg};
+}
+function onBuild(st,k,i){let pts=0,coins=0;const fw=flowerW(st);
+  if(k==='apiary')pts=15*fw*cnt(st,i,2,'flower').length;
+  if(k==='herbalist')pts=20*fw*cnt(st,i,2,'flower').length;
+  if(k==='pearl')coins=cnt(st,i,1,'sea').length;
+  return {pts:Math.round(pts*guildMult(B[k].g)),coins}}
+function weekTotal(st,wk){let s=0;for(let i=0;i<W*H;i++){const o=st.obj[i];if(o&&B[o.k])s+=weekly(st,i,wk).pts}return s}
+const cloneSt=st=>({terr:st.terr,obj:st.obj.map(o=>o?{...o}:null)});
+function plant(st,i,r,n,kind){const sp=(i>=0?around(i,1):[...Array(W*H).keys()]).filter(j=>st.terr[j]==='meadow'&&!st.obj[j]),out=[];
+  while(sp.length&&out.length<n){const j=sp.splice((r()*sp.length)|0,1)[0];st.obj[j]={k:kind};out.push(j)}return out}
+function preview(k,i){
+  const wk=S.week+1,before=weekTotal(S,wk),st=cloneSt(S);
+  st.obj[i]={k,born:S.week,id:0};
+  if(k==='nursery')plant(st,i,rng(i*977+S.week),2,'tree');
+  const after=weekTotal(st,wk),ob=onBuild(st,k,i),own=weekly(st,i,wk+(k==='sawmill'?1:0));
+  const changed=[];for(let j=0;j<W*H;j++){const o=S.obj[j];if(j===i||!o||!B[o.k])continue;const a=weekly(S,j,wk).pts,b=weekly(st,j,wk).pts;if(a!==b)changed.push([j,b-a])}
+  return {gain:after-before+ob.pts,own,changed,st,coins:ob.coins};
+}
+
+// =============== RUN FLOW ===============
+function newRun(guilds){
+  const seed=(Math.random()*1e9)|0,m=genMap(seed),sks=Object.assign({},PROF.skills),gl={};
+  guilds.forEach(g=>gl[g]=gLevel(g));
+  const pool=[].concat(...guilds.map(g=>gOpen(g,gl[g])));
+  S={v:2,seed,rngSeed:(seed^0x5bd1e995)>>>0,guilds,stage:0,score:0,weeksLeft:WEEKS+(sks.summer||0),week:0,terr:m.terr,obj:m.obj,
+     rerolls:2+(sks.reroll||0),removes:2+(sks.remove||0),coins:3+3*(sks.coins||0),relics:[],cons:[],feast:false,offer:[],nextId:1,built:0,best:0,total:0,
+     sk:sks,gl,pool,gpts:{},earned:0,skips:0,seaB:0,quest:null};
+  R=rng(S.rngSeed);
+  if(sks.garden)plant(S,-1,R,3*sks.garden,'flower');
+  if(sks.forest)plant(S,-1,R,3*sks.forest,'tree');
+  ui.shown=0;newQuest();rollOffer();save();buildTerrain();centerCamera();renderUI();
+  sfx('start');toast('Сезон: '+SEASONS[0].n+' — '+SEASONS[0].d);
+}
+function rollOffer(){const p=(S.pool&&S.pool.length>=3)?S.pool:Object.keys(B).filter(k=>S.guilds.includes(B[k].g)),o=[];
+  while(o.length<3){const k=p[(R()*p.length)|0];if(!o.includes(k))o.push(k)}S.offer=o;ui.sel=-1;ui.cursor=-1}
+
+function place(){
+  if(ui.busy||ui.sel<0||!canPlace(S,S.offer[ui.sel],ui.cursor))return;
+  const k=S.offer[ui.sel],i=ui.cursor;ui.busy=true;
+  S.obj[i]={k,born:S.week,id:S.nextId++};S.built++;dust(i);sfx('build');
+  if(k==='nursery')plant(S,i,R,2,'tree').forEach(j=>{floatAt(j,'🌲','#9be29f');dust(j)});
+  const ob=onBuild(S,k,i);
+  if(ob.pts){S.score+=ob.pts;S.total+=ob.pts;gainG(k,ob.pts);floatAt(i,'+'+ob.pts,'#9be29f')}
+  if(ob.coins){addCoins(ob.coins);floatAt(i,'+'+ob.coins+' 💰','#ffd34d')}
+  ach('first');if(B[k].g==='sea'&&++S.seaB>=6)ach('sea');questEv('build',k,i);
+  if(ui.tut>=0&&ui.tut<=2)ui.tut=3;
+  ui.sel=-1;ui.cursor=-1;renderUI();
+  setTimeout(()=>resolveWeek(ob.pts),ui.fast?60:380);
+}
+function skipWeek(){if(ui.busy)return;ui.busy=true;ui.sel=-1;ui.cursor=-1;addCoins(1);S.skips=(S.skips||0)+1;toast('Пропуск: +1 монета');renderUI();resolveWeek(0)}
+
+function resolveWeek(already){
+  S.week++;const mult=S.feast?2:1;S.feast=false;
+  const list=[];for(let i=0;i<W*H;i++){const o=S.obj[i];if(o&&B[o.k])list.push(i)}
+  list.sort((a,b)=>S.obj[a].id-S.obj[b].id);
+  let sum=already,n=0,chain=0;const wb={k:null,p:0};
+  const step=()=>{
+    if(n>=list.length)return finishWeek(sum,wb);
+    const i=list[n++],o=S.obj[i],w=weekly(S,i,S.week);
+    if(o.k==='tavern'){addCoins(1);floatAt(i,'+1 💰','#ffd34d',14)}
+    if(w.pts>0){const p=w.pts*mult;S.score+=p;S.total+=p;sum+=p;gainG(o.k,p);if(p>wb.p){wb.k=o.k;wb.p=p}if(p>=60)ach('combo');floatAt(i,'+'+p,'#ffffff');ui.flash.set(i,1);w.tg.forEach(j=>{if(!ui.flash.has(j))ui.flash.set(j,.55)});
+      sfx('tick',chain++);updateBar();setTimeout(step,ui.fast?35:240)}else step();
+  };step();
+}
+function gainG(k,p){const g=B[k].g;S.gpts=S.gpts||{};S.gpts[g]=(S.gpts[g]||0)+p}
+function finishWeek(sum,wb){
+  S.best=Math.max(S.best,sum);S.weeksLeft--;ui.fast=false;
+  if(S.relics.includes('piggy'))addCoins(1);
+  if(sum>=100)ach('w100');if(sum>=500)ach('w500');if(sum>=1500)ach('w1500');
+  if(S.obj.filter(o=>o&&o.k==='tree').length>=40)ach('forest');
+  questEv('week',null,-1,sum);if(ui.tut===3)ui.tut=4;
+  const goal=goalOf(S.stage);
+  if(S.score>=goal){({0:'st1',2:'st3',4:'st5',7:'st8'})[S.stage]&&ach(({0:'st1',2:'st3',4:'st5',7:'st8'})[S.stage]);
+    if(S.weeksLeft>=4)ach('quick');if(!S.skips)ach('noskip');
+    ui.busy=false;sfx('stage');save();renderUI();return showReward()}
+  if(S.weeksLeft<=0){ui.busy=false;if(!S.revived)return offerRevive();endRun(false);return}
+  rollOffer();ui.busy=false;save();renderUI();toast(sum?'Неделя: +'+fmt(sum)+(wb&&wb.k?' · лучшее: '+B[wb.k].em+' '+B[wb.k].n+' +'+fmt(wb.p):''):'Неделя без очков');
+}
+const goalOf=s=>s<STAGES.length?STAGES[s][1]:Math.round(STAGES[STAGES.length-1][1]*Math.pow(1.6,s-STAGES.length+1));
+const stageName=s=>s<STAGES.length?STAGES[s][0]:'Бесконечный · '+(s-STAGES.length+1);
+
+function nextStage(){
+  S.stage++;S.score=0;ui.shown=0;S.weeksLeft=weeksPer();S.skips=0;newQuest();if(S.relics.includes('dice'))S.rerolls++;
+  rollOffer();save();closeOverlay();renderUI();
+  const s=SEASONS[seasonOf(S)];toast(stageName(S.stage)+' · '+s.em+' '+s.n+': '+s.d);
+}
+
+// =============== PERSISTENCE ===============
+const KEY='ostrovok.save.v2',PKEY='ostrovok.profile.v1';
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function load(){try{const s=localStorage.getItem(KEY);const d=s?JSON.parse(s):null;return d&&d.v===2?d:null}catch(e){return null}}
+function clearSave(){try{localStorage.removeItem(KEY)}catch(e){}}
+function loadProfile(){const d={fame:0,runs:0,bestStage:0,help:false,sound:true,nums:true,gxp:{},coinsEarned:0,totalBuilt:0,skills:{},ach:{},quests:0,tut:false};
+  try{const p=JSON.parse(localStorage.getItem(PKEY));if(p&&typeof p==='object')Object.assign(d,p)}catch(e){}
+  d.gxp=Object.assign({fields:0,woods:0,trade:0,sea:0},d.gxp||{});d.skills=d.skills||{};d.ach=d.ach||{};if(d.help&&d.tut==null)d.tut=true;return d}
+function saveProfile(){try{localStorage.setItem(PKEY,JSON.stringify(PROF))}catch(e){}}
+function fixSave(s){s.skips=s.skips||0;s.seaB=s.seaB||0;s.sk=s.sk||{};s.gl=s.gl||{};s.gpts=s.gpts||{};s.earned=s.earned||0;return s}
+PROF=loadProfile();ui.sound=PROF.sound!==false;ui.nums=PROF.nums!==false;
+
+// =============== SOUND ===============
+let AC=null;
+function audio(){if(!AC){try{AC=new (window.AudioContext||window.webkitAudioContext)()}catch(e){}}if(AC&&AC.state==='suspended')AC.resume();return AC}
+function tone(f,d,type,vol,delay){const a=audio();if(!a)return;const t=a.currentTime+(delay||0),o=a.createOscillator(),g=a.createGain();o.type=type||'triangle';o.frequency.setValueAtTime(f,t);g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(vol||.12,t+.01);g.gain.exponentialRampToValueAtTime(.0001,t+d);o.connect(g).connect(a.destination);o.start(t);o.stop(t+d+.02)}
+function sfx(kind,n){if(!ui.sound)return;
+  if(kind==='tick')tone(440*Math.pow(2,Math.min(n||0,14)/12),.12,'triangle',.09);
+  else if(kind==='build'){tone(160,.18,'sine',.2);tone(90,.25,'sine',.15,.03)}
+  else if(kind==='stage'){[523,659,784,1046].forEach((f,k)=>tone(f,.25,'square',.06,k*.11))}
+  else if(kind==='start'){[392,523].forEach((f,k)=>tone(f,.2,'triangle',.08,k*.1))}
+  else if(kind==='lose'){[392,330,262].forEach((f,k)=>tone(f,.3,'sawtooth',.05,k*.15))}
+  else if(kind==='click')tone(880,.05,'square',.03)}
+
+// =============== GRAPHICS ===============
+const cv=document.getElementById('cv'),ctx=cv.getContext('2d'),wrap=document.getElementById('mapWrap');
+const cam={x:0,y:0,s:1};let dpr=1,vw=0,vh=0;
+let TER=null,FOAM=null;          // pre-rendered pixel terrain (W*P x H*P) and shoreline foam
+const SPR={};                    // sprite cache
+function mk(w,h){const c=document.createElement('canvas');c.width=w;c.height=h;return c}
+const lev={sea:0,sand:1,meadow:2};
+function mix(a,b,t){return [a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t]}
+function buildTerrain(){
+  const w=W*P,h=H*P;TER=mk(w,h);FOAM=mk(w,h);
+  const tc=TER.getContext('2d'),fc=FOAM.getContext('2d'),img=tc.createImageData(w,h),fim=fc.createImageData(w,h);
+  const L=(x,y)=>{x=Math.max(0,Math.min(W-1,x));y=Math.max(0,Math.min(H-1,y));return lev[S.terr[idx(x,y)]]};
+  const C={shallow:[86,170,201],shallow2:[110,190,214],wet:[214,190,132],sand:[236,212,154],sand2:[226,198,138],
+    grass:[124,185,82],grass2:[110,170,70],grass3:[142,198,96],cliff:[164,128,84],dark:[94,150,60]};
+  for(let py=0;py<h;py++)for(let px=0;px<w;px++){
+    const fx=(px+.5)/P-.5,fy=(py+.5)/P-.5,x0=Math.floor(fx),y0=Math.floor(fy),tx=fx-x0,ty=fy-y0;
+    const s=t=>t*t*(3-2*t),a=L(x0,y0),b=L(x0+1,y0),c=L(x0,y0+1),d=L(x0+1,y0+1);
+    const top=a+(b-a)*s(tx),bot=c+(d-c)*s(tx);let v=top+(bot-top)*s(ty);
+    const n=hash(px*73+py*977)*0.22-0.11+(hash(((px>>2)*31+(py>>2)*7)+5)-0.5)*0.18;v+=n;
+    let col,al=255,foam=0;
+    if(v<0.38){ // water: transparent to show animated sea, tint shallows near coast
+      const t=Math.max(0,(v-0.0)/0.38);col=mix([0,0,0],C.shallow,1);al=Math.round(Math.pow(t,1.6)*200);
+      if(v>0.3)foam=Math.round((v-0.3)/0.08*230);
+      if(hash(px*11+py*13)>.985&&v>.22){col=C.shallow2}
+    } else if(v<0.48){col=C.wet;}
+    else if(v<1.42){col=hash(px*5+py*17)>.8?C.sand2:C.sand;if(hash(px*91+py*3)>.992)col=[250,240,214]}
+    else if(v<1.52){col=C.cliff}
+    else {const q=hash(px*3+py*29);col=q>.9?C.grass3:(q<.12?C.grass2:C.grass);
+      const blob=hash(((px>>3)*13+(py>>3)*71));if(blob>.75)col=mix(col,C.dark,.35);
+      if(hash(px*7+py*41)>.993)col=[236,230,120]}
+    const o=(py*w+px)*4;img.data[o]=col[0];img.data[o+1]=col[1];img.data[o+2]=col[2];img.data[o+3]=al;
+    fim.data[o]=255;fim.data[o+1]=255;fim.data[o+2]=255;fim.data[o+3]=foam;
+  }
+  tc.putImageData(img,0,0);fc.putImageData(fim,0,0);
+}
+// pixel sprites drawn on a 16x16 (or taller) grid
+function sprite(key,draw,w,h){if(SPR[key])return SPR[key];const c=mk(w||P,h||P),g=c.getContext('2d');draw(g);SPR[key]=c;return c}
+const px=(g,x,y,c,w,h)=>{g.fillStyle=c;g.fillRect(x,y,w||1,h||1)};
+function treeSpr(v){return sprite('tree'+v,g=>{
+  const greens=[['#2f6b35','#3f8a4c','#5aa75e','#7fc47a'],['#2b5f3a','#367a48','#4f9a5c','#74b878'],['#3a6b2a','#4d8a37','#6aa84d','#90c56d']][v%3];
+  px(g,7,13,'#6b4626',2,3);px(g,6,15,'#4a2f18',4,1);
+  const blob=(cx,cy,r,col)=>{for(let y=-r;y<=r;y++)for(let x=-r;x<=r;x++)if(x*x+y*y<=r*r+r*.6)px(g,cx+x,cy+y,col)};
+  blob(8,8,6,greens[0]);blob(7,7,5,greens[1]);blob(6,6,3,greens[2]);px(g,5,4,greens[3],2,1);px(g,4,5,greens[3]);
+  if(v>3){px(g,10,9,'#c94a3c');px(g,6,10,'#c94a3c')}},P,P)}
+function rockSpr(v){return sprite('rock'+v,g=>{
+  const c=['#7d8590','#959da8','#b9c0c9','#5f6670'];
+  for(let y=8;y<15;y++)for(let x=3;x<13;x++){const dx=(x-8)/5,dy=(y-11.5)/3.6;if(dx*dx+dy*dy<1)px(g,x,y,c[0])}
+  for(let y=8;y<12;y++)for(let x=4;x<11;x++){const dx=(x-7)/3.6,dy=(y-10)/2.4;if(dx*dx+dy*dy<1)px(g,x,y,c[1])}
+  px(g,5,9,c[2],3,1);px(g,6,8,c[2],2,1);px(g,4,14,c[3],9,1);if(v%2)px(g,11,12,'#6f9a4a',2,1)},P,P)}
+function flowerSpr(v){return sprite('fl'+v,g=>{
+  const cols=['#f2d24b','#e8708f','#f4f1ea','#b27be0'];
+  for(let k=0;k<4;k++){const x=2+((hash(v*9+k)*11)|0),y=4+((hash(v*5+k*3)*9)|0),c=cols[(v+k)%4];
+    px(g,x,y+2,'#4f8a3a',1,2);px(g,x-1,y,c);px(g,x+1,y,c);px(g,x,y-1,c);px(g,x,y+1,c);px(g,x,y,'#f6b21a')}},P,P)}
+function houseSpr(k){const d=B[k],G=GUILD[d.g];return sprite('h'+k,g=>{
+  // 16x20 sprite: walls + roof in guild colours, chimney, door, windows
+  const roof=G.roof,wall='#efe0bd',wall2='#d9c497',trim='#5b4630';
+  if(k==='field'){for(let r=0;r<5;r++){px(g,1,6+r*3,'#8a6a2c',14,1);for(let x=1;x<15;x+=2)px(g,x,4+r*3+(x%4?0:1),'#e6c24a',1,2)}px(g,0,19,'#7a5a25',16,1);return}
+  if(k==='well'){px(g,4,11,'#8e949c',8,6);px(g,5,12,'#2a5c7a',6,2);px(g,4,11,'#b8bec6',8,1);px(g,4,5,trim,1,6);px(g,11,5,trim,1,6);px(g,3,4,'#9c3b2e',10,2);px(g,7,7,'#6b4a26',2,4);return}
+  if(k==='fishboat'||k==='pearl'){px(g,2,13,'#8a5a2b',12,3);px(g,3,16,'#6b4320',10,1);px(g,7,4,trim,1,9);px(g,8,5,'#f4efe2',4,6);px(g,8,5,G.color,4,1);if(k==='pearl'){px(g,3,12,'#f6f2e8',2,1);px(g,11,12,'#f6f2e8',2,1)}return}
+  if(k==='lighthouse'){for(let y=2;y<18;y++){const half=2+((y-2)/6|0);px(g,8-half,y,(y>>2)%2?'#e9e2d0':'#c0392b',half*2,1)}px(g,6,1,'#ffd34d',4,2);px(g,5,0,trim,6,1);return}
+  if(k==='mill'||k==='tower'){px(g,5,8,wall,6,10);px(g,5,8,wall2,1,10);px(g,4,6,roof,8,3);px(g,7,14,trim,2,4);
+    if(k==='mill'){px(g,1,3,'#efe6d0',6,1);px(g,9,3,'#efe6d0',6,1);px(g,7,0,'#efe6d0',1,6);px(g,7,7,'#efe6d0',1,0)}
+    else{px(g,3,5,trim,10,1);px(g,4,2,'#7b5a35',8,3)}return}
+  px(g,2,9,wall,12,9);px(g,2,9,wall2,1,9);px(g,13,9,wall2,1,9);
+  for(let y=0;y<6;y++)px(g,1+y,8-y,roof,14-2*y,1);px(g,0,9,roof,16,1);
+  px(g,11,2,'#7b5a46',2,4);px(g,7,13,trim,3,5);px(g,8,15,'#e8c35a');px(g,3,11,'#7cc0e0',2,2);px(g,11,11,'#7cc0e0',2,2);
+  px(g,1,18,'rgba(0,0,0,.25)',14,1);
+  if(d.g==='trade'){px(g,2,12,G.color,12,1);}
+},P,20)}
+function iconSpr(k){if(SPR['i'+k])return SPR['i'+k];const c=mk(64,64),g=c.getContext('2d');
+  g.fillStyle='rgba(255,248,234,.95)';g.beginPath();g.arc(32,32,26,0,7);g.fill();g.lineWidth=4;g.strokeStyle=GUILD[B[k].g].color;g.stroke();
+  g.font='34px "Apple Color Emoji","Segoe UI Emoji",sans-serif';g.textAlign='center';g.textBaseline='middle';g.fillText(B[k].em,32,35);SPR['i'+k]=c;return c}
+
+function resize(){dpr=Math.min(3,window.devicePixelRatio||1);vw=wrap.clientWidth;vh=wrap.clientHeight;cv.width=Math.round(vw*dpr);cv.height=Math.round(vh*dpr)}
+function centerCamera(){vw=wrap.clientWidth;vh=wrap.clientHeight;const s=Math.min(vw/(W*T),vh/(H*T))*1.04;cam.s=s;cam.x=(vw-W*T*s)/2;cam.y=(vh-H*T*s)/2}
+const toWorld=(x,y)=>[(x-cam.x)/cam.s,(y-cam.y)/cam.s];
+function tileAt(x,y){const [wx,wy]=toWorld(x,y),tx=Math.floor(wx/T),ty=Math.floor(wy/T);return inMap(tx,ty)?idx(tx,ty):-1}
+
+let time=0;
+const clouds=[...Array(4)].map((_,k)=>({x:hash(k+1)*W*T,y:hash(k+9)*H*T,r:90+hash(k+4)*80,v:6+hash(k+2)*6}));
+const dusts=[];
+function dust(i){const [x,y]=xy(i);for(let k=0;k<10;k++)dusts.push({x:x*T+T/2,y:y*T+T*.75,vx:(Math.random()-.5)*60,vy:-20-Math.random()*40,t:0})}
+
+function draw(){
+  if(!S||!TER)return;
+  ctx.setTransform(dpr,0,0,dpr,0,0);ctx.imageSmoothingEnabled=false;
+  // deep sea with moving wave glints (screen space for cheapness)
+  ctx.fillStyle='#1b5a83';ctx.fillRect(0,0,vw,vh);
+  ctx.setTransform(dpr*cam.s,0,0,dpr*cam.s,dpr*cam.x,dpr*cam.y);
+  const pad=6*T;
+  ctx.fillStyle='#205f8a';
+  for(let y=-pad;y<H*T+pad;y+=24)for(let x=-pad;x<W*T+pad;x+=32){
+    const ph=hash(((x/32)|0)*17+((y/24)|0)*131);const a=Math.sin(time*1.6+ph*6.28);if(a<.55)continue;
+    ctx.fillStyle='rgba(160,215,240,'+((a-.55)*0.9).toFixed(3)+')';ctx.fillRect(x+ph*20+Math.sin(time+ph*9)*4,y+ph*12,10,2)}
+  // terrain
+  ctx.drawImage(TER,0,0,W*T,H*T);
+  ctx.globalAlpha=.55+.35*Math.sin(time*2);ctx.drawImage(FOAM,0,0,W*T,H*T);ctx.globalAlpha=1;
+
+  const k=ui.sel>=0?S.offer[ui.sel]:null,likes=k?B[k].likes:[];
+  const pv=(k&&ui.cursor>=0&&canPlace(S,k,ui.cursor))?preview(k,ui.cursor):null;
+  const st=pv?pv.st:S;
+  if(k){for(let i=0;i<W*H;i++){if(!canPlace(S,k,i))continue;const [x,y]=xy(i);ctx.fillStyle='rgba(255,255,255,.14)';ctx.fillRect(x*T+4,y*T+4,T-8,T-8)}}
+  if(pv&&B[k].r>0){ctx.fillStyle='rgba(228,87,46,.18)';for(const j of around(ui.cursor,B[k].r)){const [x,y]=xy(j);ctx.fillRect(x*T,y*T,T,T)}}
+
+  // objects sorted by row for depth; shadows first
+  for(let i=0;i<W*H;i++){const o=st.obj[i];if(!o)continue;const [x,y]=xy(i);
+    ctx.fillStyle='rgba(20,40,10,.28)';ctx.beginPath();ctx.ellipse(x*T+T/2,y*T+T*.86,T*(B[o.k]?.42:o.k==='tree'?.34:.26),T*.12,0,0,7);ctx.fill()}
+  for(let i=0;i<W*H;i++){const o=st.obj[i];if(!o)continue;const [x,y]=xy(i),v=(hash(i*7+3)*6)|0;
+    const ghost=pv&&i===ui.cursor,planted=pv&&!S.obj[i];ctx.globalAlpha=ghost?.8:planted?.6:1;
+    if(o.k==='tree'){const sway=Math.sin(time*1.3+i)*0.6;ctx.drawImage(treeSpr(v),x*T+sway,y*T-6,T,T)}
+    else if(o.k==='rock')ctx.drawImage(rockSpr(v),x*T,y*T,T,T);
+    else if(o.k==='flower')ctx.drawImage(flowerSpr(v),x*T,y*T,T,T);
+    else if(B[o.k]){
+      ctx.drawImage(houseSpr(o.k),x*T,y*T-T*.25,T,T*1.25);
+      const ic=iconSpr(o.k),bob=o.k==='fishboat'?Math.sin(time*2+i)*1.5:0;ctx.imageSmoothingEnabled=true;
+      ctx.drawImage(ic,x*T+T*.56,y*T-T*.22+bob,T*.46,T*.46);ctx.imageSmoothingEnabled=false;
+      if(o.up){ctx.font='12px sans-serif';ctx.textAlign='center';ctx.fillText('⭐',x*T+8,y*T+4)}}
+    ctx.globalAlpha=1;
+    const f=ui.flash.get(i);if(f){ctx.strokeStyle='rgba(255,255,255,'+f+')';ctx.lineWidth=3;rr(x*T+2,y*T+2,T-4,T-4,10);ctx.stroke()}
+  }
+  // liked objects everywhere (dashed gold), in-range targets (solid), changed neighbours (blue badge)
+  if(k){ctx.setLineDash([5,4]);ctx.lineWidth=2;ctx.strokeStyle='rgba(255,226,92,.95)';
+    for(let i=0;i<W*H;i++){if(!likes.some(l=>isK(S,i,l)))continue;const [x,y]=xy(i);rr(x*T+4,y*T+4,T-8,T-8,8);ctx.stroke()}ctx.setLineDash([])}
+  if(pv){ctx.lineWidth=3;ctx.strokeStyle='#ffe066';for(const j of pv.own.tg){const [x,y]=xy(j);rr(x*T+3,y*T+3,T-6,T-6,9);ctx.stroke()}
+    for(const [j,d] of pv.changed){const [x,y]=xy(j);ctx.strokeStyle='#5fd3ff';rr(x*T+3,y*T+3,T-6,T-6,9);ctx.stroke();badge(x*T+T/2,y*T+2,(d>0?'+':'')+d,'#1d6fa5')}
+    const [x,y]=xy(ui.cursor);ctx.strokeStyle='#e4572e';ctx.lineWidth=3;rr(x*T+1.5,y*T+1.5,T-3,T-3,10);ctx.stroke();
+    badge(x*T+T/2,y*T-10,(pv.gain>=0?'+':'')+pv.gain+(pv.coins?' · +'+pv.coins+'💰':''),'#e4572e')}
+  else if(k&&ui.cursor>=0){const [x,y]=xy(ui.cursor);ctx.strokeStyle='rgba(200,40,30,.8)';ctx.lineWidth=2;ctx.setLineDash([4,4]);ctx.strokeRect(x*T+3,y*T+3,T-6,T-6);ctx.setLineDash([])}
+  if(ui.nums&&!k&&!ui.removing){const wk=S.week+1;
+    for(let i=0;i<W*H;i++){const o=S.obj[i];if(!o||!B[o.k]||o.k==='well'||o.k==='warehouse')continue;const [x,y]=xy(i),p=weekly(S,i,wk).pts;
+      badgeS(x*T+T/2,y*T+T-5,p>0?'+'+p:(o.k==='sawmill'||o.k==='fair')?'⏳':'0',p>0?GUILD[B[o.k].g].color:'rgba(70,60,45,.75)')}}
+  if(ui.removing){ctx.strokeStyle='rgba(228,87,46,.95)';ctx.lineWidth=2;ctx.setLineDash([4,3]);for(let i=0;i<W*H;i++){if(!S.obj[i])continue;const [x,y]=xy(i);ctx.strokeRect(x*T+5,y*T+5,T-10,T-10)}ctx.setLineDash([])}
+  // dust
+  for(const d of dusts){ctx.fillStyle='rgba(240,225,190,'+(1-d.t)+')';ctx.fillRect(d.x,d.y,3,3)}
+  // cloud shadows
+  for(const c of clouds){const g=ctx.createRadialGradient(c.x,c.y,0,c.x,c.y,c.r);g.addColorStop(0,'rgba(10,30,50,.16)');g.addColorStop(1,'rgba(10,30,50,0)');ctx.fillStyle=g;ctx.fillRect(c.x-c.r,c.y-c.r,c.r*2,c.r*2)}
+  // floats
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  for(const f of ui.floats){ctx.globalAlpha=Math.max(0,1-f.t);ctx.font='800 '+(f.size||17)+'px Rubik,sans-serif';ctx.lineWidth=4;ctx.strokeStyle='rgba(30,25,15,.8)';
+    const yy=f.y-f.t*28-Math.sin(Math.min(1,f.t*4)*3.14)*6;ctx.strokeText(f.s,f.x,yy);ctx.fillStyle=f.c;ctx.fillText(f.s,f.x,yy)}
+  ctx.globalAlpha=1;
+  // warm vignette
+  ctx.setTransform(dpr,0,0,dpr,0,0);const vg=ctx.createRadialGradient(vw/2,vh/2,Math.min(vw,vh)*.35,vw/2,vh/2,Math.max(vw,vh)*.75);
+  vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(5,20,35,.35)');ctx.fillStyle=vg;ctx.fillRect(0,0,vw,vh);
+}
+function rr(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath()}
+function badge(cx,cy,s,col){ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='800 14px Rubik,sans-serif';const w=ctx.measureText(s).width+14;ctx.fillStyle=col;rr(cx-w/2,cy-11,w,22,11);ctx.fill();ctx.fillStyle='#fff';ctx.fillText(s,cx,cy+1)}
+function badgeS(cx,cy,s,col){ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='800 11px Rubik,sans-serif';const w=Math.max(20,ctx.measureText(s).width+10);
+  ctx.fillStyle='rgba(20,15,8,.35)';rr(cx-w/2,cy-7,w,16,8);ctx.fill();ctx.fillStyle=col;rr(cx-w/2,cy-8,w,16,8);ctx.fill();ctx.strokeStyle='rgba(255,255,255,.7)';ctx.lineWidth=1.2;ctx.stroke();ctx.fillStyle='#fff';ctx.fillText(s,cx,cy+.5)}
+function floatAt(i,s,c,size){const [x,y]=xy(i);ui.floats.push({x:x*T+T/2,y:y*T+T/2-8,s,c,t:0,size})}
+const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+let last=performance.now();
+function loop(now){const dt=Math.min(.05,(now-last)/1000);last=now;if(!reduced)time+=dt;
+  ui.floats.forEach(f=>f.t+=dt*(ui.fast?3:1.05));ui.floats=ui.floats.filter(f=>f.t<1);
+  for(const [kk,v] of ui.flash){const nv=v-dt*1.6;if(nv<=0)ui.flash.delete(kk);else ui.flash.set(kk,nv)}
+  for(const d of dusts){d.t+=dt*1.6;d.x+=d.vx*dt;d.y+=d.vy*dt;d.vy+=90*dt}for(let n=dusts.length-1;n>=0;n--)if(dusts[n].t>=1)dusts.splice(n,1);
+  for(const c of clouds){c.x+=c.v*dt;if(c.x-c.r>W*T+200)c.x=-c.r-200}
+  if(S&&ui.shown!==S.score){const d=S.score-ui.shown,st=Math.round(d*Math.min(1,dt*9));ui.shown+=st||Math.sign(d);barText()}
+  draw();requestAnimationFrame(loop)}
+
+// =============== UI ===============
+const $=id=>document.getElementById(id),fmt=n=>n.toLocaleString('ru-RU');
+function updateBar(){const g=goalOf(S.stage);ui.proj=weekTotal(S,S.week+1);
+  $('barFill').style.width=Math.min(100,S.score/g*100)+'%';
+  $('barProj').style.width=Math.min(100,(S.score+ui.proj*Math.max(0,S.weeksLeft-(ui.busy?1:0)))/g*100)+'%';barText()}
+function barText(){$('barText').textContent=fmt(ui.shown)+' / '+fmt(goalOf(S.stage))+(ui.proj?'  ·  +'+fmt(ui.proj)+'/нед':'')}
+function renderUI(){
+  if(!S)return;
+  $('stageName').firstChild.nodeValue=stageName(S.stage);
+  $('stageNum').textContent=S.stage<STAGES.length?'этап '+(S.stage+1)+' из '+STAGES.length:'после столицы';
+  const se=SEASONS[seasonOf(S)];$('season').textContent=se.em+' '+se.n;$('season').title=se.d;
+  $('coins').textContent=S.coins;$('weeks').textContent=S.weeksLeft;updateBar();
+  const rl=$('relics');rl.innerHTML='';S.relics.forEach(r=>{const b=document.createElement('button');b.textContent=RELICS[r].em;b.title=RELICS[r].n;b.onclick=()=>info(RELICS[r].em,RELICS[r].n,'Реликвия',RELICS[r].t);rl.appendChild(b)});rl.hidden=!S.relics.length;
+  const cs=$('cons');cs.innerHTML='';
+  if(S.cons.length){cs.append('Запасы:');S.cons.forEach((c,n)=>{const b=document.createElement('button');b.innerHTML=CONS[c].em+' '+CONS[c].n;b.disabled=ui.busy;b.onclick=()=>useCons(n);cs.appendChild(b)})}
+  cs.hidden=!S.cons.length;
+  const cards=$('cards');cards.innerHTML='';
+  S.offer.forEach((k,n)=>{const d=B[k],b=document.createElement('button');b.className='card'+(ui.sel===n?' sel':'');b.id='card'+n;b.disabled=ui.busy;
+    b.innerHTML='<span class="em">'+d.em+'</span><span class="nm">'+d.n+'</span><span class="gd" style="background:'+GUILD[d.g].color+'">'+GUILD[d.g].name+'</span><span class="info" aria-hidden="true">i</span>';
+    b.onclick=e=>{if(e.target.classList.contains('info'))return showTip(k);if(ui.busy)return;sfx('click');ui.removing=false;ui.sel=ui.sel===n?-1:n;ui.cursor=-1;renderUI()};
+    b.oncontextmenu=e=>{e.preventDefault();showTip(k)};cards.appendChild(b)});
+  const a=$('actions');a.innerHTML='';
+  const mkb=(id,label,cls,fn,dis,num)=>{const b=document.createElement('button');b.id=id;b.className='btn '+(cls||'');b.innerHTML=label+(num!=null?' <span class="n">'+num+'</span>':'');b.disabled=!!dis;b.onclick=fn;a.appendChild(b)};
+  if(ui.sel>=0&&canPlace(S,S.offer[ui.sel],ui.cursor)){const pv=preview(S.offer[ui.sel],ui.cursor);
+    mkb('bCancel','Отмена','',()=>{ui.cursor=-1;renderUI()});mkb('bBuild','Построить','primary',place,ui.busy,(pv.gain>=0?'+':'')+pv.gain)}
+  else{mkb('bReroll','Переброс','',()=>{if(S.rerolls>0&&!ui.busy){S.rerolls--;rollOffer();save();sfx('click');renderUI()}},ui.busy||S.rerolls<=0,S.rerolls);
+    mkb('bRemove','Снос',ui.removing?'on':'',()=>{if(ui.busy)return;ui.removing=!ui.removing;ui.sel=-1;ui.cursor=-1;renderUI()},ui.busy||S.removes<=0,S.removes);
+    mkb('bSkip','Пропустить','',skipWeek,ui.busy)}
+  const q=S.quest,qe=$('quest');qe.hidden=!q;
+  if(q){qe.className='quest'+(q.done?' done':'');qe.innerHTML='<span>📜</span><span style="flex:1;min-width:0">'+(q.done?'Выполнено: ':'')+q.t+' → '+QREW[q.rw].t+'</span><span class="qb">'+(q.done?'✔':q.have+'/'+q.need)+'</span>'}
+  $('menuBtn').disabled=ui.busy;coach();
+  const h=$('hint');
+  h.textContent=ui.busy?(ui.fast?'Подсчёт ×8':'Подсчёт… нажмите, чтобы ускорить'):ui.removing?'Нажмите на объект, который нужно снести':
+    ui.sel>=0&&ui.cursor<0?'Нажмите на клетку · жёлтым — всё, что даёт бонус':ui.sel>=0?(canPlace(S,S.offer[ui.sel],ui.cursor)?B[S.offer[ui.sel]].t:placeErr(S.offer[ui.sel],ui.cursor)):(S.feast?'🎉 Праздник: эта неделя ×2':'Выберите здание внизу');
+}
+const TUT=[
+  {pos:'bot',t:'Это ваш остров. Каждая неделя — одно здание. <b>Выберите карточку</b> внизу.',hi:'#cards .card'},
+  {pos:'top',t:'Жёлтым пунктиром подсвечено всё, что даёт этому зданию бонус. <b>Нажмите на клетку</b>, куда хотите поставить.'},
+  {pos:'top',t:'Число над клеткой — сколько очков это принесёт. <b>Нажмите «Построить»</b> или ту же клетку ещё раз.',hi:'#bBuild'},
+  {pos:'top',t:'Идёт подсчёт недели: каждое здание приносит очки. Тап или <b>пробел</b> — ускорить.'},
+  {pos:'top',t:'Полоса сверху — <b>цель этапа</b>, штриховка — прогноз до конца этапа. Цифры под зданиями — их доход на следующей неделе. 📜 Задание этапа даёт бонус.',hi:'.bar',btn:'Понятно'},
+  {pos:'bot',t:'Нет хорошего места? <b>«Переброс»</b> меняет карточки, <b>«Снос»</b> убирает дерево или камень. После забега растут ранг, гильдии и навыки. Удачи!',hi:'#bReroll',btn:'Начать игру'}
+];
+function coach(){
+  document.querySelectorAll('.pulse').forEach(e=>e.classList.remove('pulse'));
+  const c=$('coach');
+  if(ui.tut===0&&ui.sel>=0)ui.tut=1; else if(ui.tut===1&&ui.sel<0)ui.tut=0;
+  if(ui.tut===1&&ui.sel>=0&&canPlace(S,S.offer[ui.sel],ui.cursor))ui.tut=2; else if(ui.tut===2&&!(ui.sel>=0&&canPlace(S,S.offer[ui.sel],ui.cursor)))ui.tut=ui.sel>=0?1:0;
+  if(ui.tut<0||!S){c.innerHTML='';return}
+  const st=TUT[ui.tut];
+  c.innerHTML='<div class="coach '+st.pos+'"><span class="stp">Обучение · '+(ui.tut+1)+' из '+TUT.length+'</span><span>'+st.t+'</span>'+(st.btn?'<button class="btn" id="tutNext">'+st.btn+'</button>':'')+'</div>';
+  if(st.hi)document.querySelectorAll(st.hi).forEach(e=>e.classList.add('pulse'));
+  if(st.btn)c.querySelector('#tutNext').onclick=()=>{ui.tut++;if(ui.tut>=TUT.length){ui.tut=-1;PROF.tut=true;PROF.help=true;saveProfile()}renderUI()};
+}
+function startTutorial(){clearSave();closeOverlay();ui.tut=0;newRun(['fields','woods'])}
+function showPause(){if(!S||ui.busy)return;save();
+  overlay('<h2>Пауза</h2><p>'+stageName(S.stage)+' · '+S.weeksLeft+' нед. · '+fmt(S.score)+' / '+fmt(goalOf(S.stage))+'. Забег сохраняется автоматически.</p>'+
+    '<button class="btn primary" id="pRes">Продолжить</button>'+
+    '<div class="btnrow"><button class="btn" id="pGuild">🛡️ Гильдии</button><button class="btn" id="pSkill">🌟 Навыки</button></div>'+
+    '<div class="btnrow"><button class="btn" id="pAch">🏆 Достижения</button><button class="btn" id="pHelp">Как играть</button></div>'+
+    '<div class="btnrow"><button class="btn" id="pSnd">Звук: '+(ui.sound?'вкл':'выкл')+'</button><button class="btn" id="pNum">Цифры: '+(ui.nums?'вкл':'выкл')+'</button></div>'+
+    '<button class="btn" id="pMenu">🏠 Главное меню</button><button class="btn" id="pEnd">Завершить забег</button>',o=>{
+    o.querySelector('#pRes').onclick=()=>{closeOverlay();renderUI()};
+    o.querySelector('#pGuild').onclick=()=>showGuilds(showPause);
+    o.querySelector('#pSkill').onclick=()=>showSkills(showPause);
+    o.querySelector('#pAch').onclick=()=>showAch(showPause);
+    o.querySelector('#pHelp').onclick=()=>showHelp(showPause);
+    o.querySelector('#pSnd').onclick=()=>{ui.sound=!ui.sound;PROF.sound=ui.sound;saveProfile();showPause()};
+    o.querySelector('#pNum').onclick=()=>{ui.nums=!ui.nums;PROF.nums=ui.nums;saveProfile();numBtn();showPause()};
+    o.querySelector('#pMenu').onclick=()=>{save();ui.tut=-1;renderUI();showMenu()};
+    o.querySelector('#pEnd').onclick=()=>overlay('<h2>Завершить забег?</h2><p>Вы получите славу и опыт гильдий за то, что уже построено.</p><div class="btnrow"><button class="btn" id="eNo">Отмена</button><button class="btn primary" id="eYes">Завершить</button></div>',
+      q=>{q.querySelector('#eNo').onclick=showPause;q.querySelector('#eYes').onclick=()=>endRun(true)})})}
+function showAch(back){const ids=Object.keys(ACH),got=ids.filter(id=>PROF.ach[id]).length;
+  overlay('<h2>Достижения · '+got+' / '+ids.length+'</h2><p>Каждое достижение приносит славу ⭐ — она повышает ранг.</p><div class="achs">'+
+    ids.map(id=>{const a=ACH[id],on=PROF.ach[id];return '<div class="ach'+(on?'':' off')+'"><span class="em">'+(on?a.em:'🔒')+'</span><span><strong>'+a.n+'</strong>'+a.t+'</span><span class="rw">'+(on?'✔':'+'+a.f+' ⭐')+'</span></div>'}).join('')+
+    '</div><button class="btn primary" id="aOk">Готово</button>',o=>o.querySelector('#aOk').onclick=back||showMenu)}
+$('menuBtn').onclick=showPause;
+// ===== MONETIZATION (stubs: real ads/IAP are wired in the iOS build — AdMob rewarded + StoreKit non-consumable) =====
+// Policy: no forced ads ever. Ads are only optional "watch for a bonus" buttons. Островок+ grants those bonuses instantly.
+function watchAd(label,cb){
+  if(PROF.premium){cb();toast('Островок+: '+label);return}
+  let n=3;overlay('<h2>📺 Реклама</h2><div class="adbox">Демо-заглушка рекламного ролика.<br>В версии для iPhone здесь будет короткое видео.</div><p>Награда: <b>'+label+'</b></p><button class="btn primary" id="adDone" disabled>Получить награду ('+n+')</button>',o=>{
+    const b=o.querySelector('#adDone'),t=setInterval(()=>{n--;if(!document.body.contains(b))return clearInterval(t);if(n>0)b.textContent='Получить награду ('+n+')';else{clearInterval(t);b.disabled=false;b.textContent='Получить награду'}},1000);
+    b.onclick=()=>{sfx('stage');cb()}})}
+function offerRevive(){const need=goalOf(S.stage)-S.score,pr=weekTotal(S,S.week+1);
+  overlay('<h2>Недели закончились</h2><p>До цели «'+stageName(S.stage)+'» не хватает <b>'+fmt(need)+'</b> очков. Ваш доход сейчас — +'+fmt(pr)+' в неделю.</p>'+
+    '<button class="btn primary" id="rvAd">'+(PROF.premium?'⭐':'📺')+' Второй шанс: +2 недели</button><button class="btn" id="rvNo">Завершить забег</button><p style="font-size:12.5px">Второй шанс — один раз за забег.</p>',o=>{
+    o.querySelector('#rvAd').onclick=()=>watchAd('+2 недели',()=>{S.revived=1;S.weeksLeft+=2;rollOffer();save();closeOverlay();renderUI();toast('Ещё 2 недели — вперёд!')});
+    o.querySelector('#rvNo').onclick=()=>endRun(false)})}
+function showPlus(back){
+  overlay('<h2>⭐ Островок+</h2><p>Разовая покупка, без подписки. Поддерживает разработку.</p><ul class="rules">'+
+    '<li><b>✔</b><span>Никакой рекламы: все бонусы «за рекламу» выдаются сразу.</span></li>'+
+    '<li><b>✔</b><span>Второй шанс (+2 недели) в каждом забеге и +3 💰 в каждой лавке — без просмотров.</span></li>'+
+    '<li><b>✔</b><span>Игра и прогресс те же — никаких платных преимуществ сверх этого.</span></li></ul>'+
+    (PROF.premium?'<p><b>У вас уже есть Островок+. Спасибо!</b></p>':'<button class="btn plus" disabled>Покупка появится в версии для App Store</button>')+
+    '<button class="btn primary" id="plOk">Назад</button>',o=>o.querySelector('#plOk').onclick=back||showMenu)}
+function placeErr(k,i){if(i<0)return '';if(S.terr[i]==='sea')return 'Это море';if(S.obj[i])return 'Клетка занята';const on=B[k].on;return on==='coast'?'Нужна клетка у воды':on==='land'?'Нужна клетка луга':'Сюда нельзя'}
+function toast(s){const t=$('toast');t.textContent=s;t.hidden=false;clearTimeout(toast.h);toast.h=setTimeout(()=>t.hidden=true,2200)}
+function overlay(html,bind){$('overlay').innerHTML='<div class="ov"><div class="sheet">'+html+'</div></div>';bind&&bind($('overlay'))}
+function closeOverlay(){$('overlay').innerHTML=''}
+function info(em,name,tag,text,col){overlay('<div class="tip"><div class="head"><span class="em">'+em+'</span><h2>'+name+'</h2></div></div><span class="tag" style="background:'+(col||'#6f6450')+'">'+tag+'</span><p>'+text+'</p><button class="btn primary" id="iOk">Закрыть</button>',o=>o.querySelector('#iOk').onclick=closeOverlay)}
+function showTip(k){const d=B[k];info(d.em,d.n,GUILD[d.g].name,d.t+'<br><br>Где строить: '+(d.on==='coast'?'на клетке у воды':d.on==='land'?'на свободном лугу':'на лугу или песке')+'.',GUILD[d.g].color)}
+function useCons(n){if(ui.busy)return;const c=S.cons[n],d=CONS[c];
+  overlay('<div class="tip"><div class="head"><span class="em">'+d.em+'</span><h2>'+d.n+'</h2></div></div><p>'+d.t+'</p><div class="btnrow"><button class="btn" id="cNo">Оставить</button><button class="btn primary" id="cYes">Использовать</button></div>',o=>{
+    o.querySelector('#cNo').onclick=closeOverlay;
+    o.querySelector('#cYes').onclick=()=>{S.cons.splice(n,1);
+      if(c==='saplings')plant(S,-1,R,3,'tree').forEach(j=>{dust(j);floatAt(j,'🌲','#9be29f')});
+      if(c==='seeds')plant(S,-1,R,3,'flower').forEach(j=>{dust(j);floatAt(j,'🌸','#ffd1e0')});
+      if(c==='dynamite')S.removes+=2; if(c==='bones')S.rerolls+=2; if(c==='feast')S.feast=true;
+      save();closeOverlay();sfx('build');renderUI()}})}
+
+function rankHTML(f,from){const r=rankOf(f),nx=RANKS[r+1],cur=RANKS[r][1],pc=x=>nx?Math.max(0,Math.min(100,(x-cur)/(nx[1]-cur)*100)):100;
+  const st=from==null?pc(f):(rankOf(from)===r?pc(from):0);
+  return '<div class="rank"><div class="num">'+(r+1)+'</div><div style="flex:1;min-width:0"><b>Ранг: '+RANKS[r][0]+'</b><div class="segs">'+RANKS.map((_,i)=>'<i class="'+(i<=r?'on':'')+'"></i>').join('')+'</div>'+
+    '<div class="xp"><i style="width:'+st+'%" data-to="'+pc(f)+'"></i></div><span>'+(nx?fmt(f)+' / '+fmt(nx[1])+' ⭐ до ранга «'+nx[0]+'» (+1 очко навыков)':'Высший ранг')+'</span></div></div>'}
+function lvlReward(g,L){return L<=4?'откроет '+B[gBlds(g)[L+1]].em+' '+B[gBlds(g)[L+1]].n:'все здания ×1,1'}
+function guildHTML(g,from){
+  if(!gUnlocked(g)){const L=GLOCK[g],c=L.cur(),pc=Math.min(100,c/L.need*100);
+    return '<div class="gp locked"><div class="shield">🔒</div><div class="body"><div class="ttl"><strong>'+GUILD[g].name+'</strong><small>'+Math.min(c,L.need)+' / '+L.need+'</small></div><small>'+L.txt(L.need-c)+'</small><div class="xp"><i style="width:'+pc+'%"></i></div><div class="bl">'+gBlds(g).map(()=>'<span class="q">❔</span>').join('')+'</div></div></div>'}
+  const x=PROF.gxp[g]||0,l=gLevel(g),nx=GXP[l],cur=GXP[l-1],pc=v=>nx!=null?Math.max(0,Math.min(100,(v-cur)/(nx-cur)*100)):100,open=gOpen(g).length;
+  let lf=l;if(from!=null){lf=0;for(const t of GXP)if(from>=t)lf++}
+  const st=from==null?pc(x):(lf===l?pc(from):0);
+  return '<div class="gp"><div class="shield" style="background:'+GUILD[g].color+'">'+GEM[g]+'</div><div class="body"><div class="ttl"><strong>'+GUILD[g].name+'</strong><small>Уровень '+l+(from!=null&&x>from?' · +'+fmt(x-from)+' опыта':'')+'</small></div>'+
+    '<div class="lv">'+[1,2,3,4,5].map(i=>'<i class="'+(i<=l?'on':'')+'"></i>').join('')+'</div>'+
+    '<div class="bl">'+gBlds(g).map((k,i)=>i<open?'<span title="'+B[k].n+'">'+B[k].em+'</span>':'<span class="q" title="Откроется позже">❔</span>').join('')+'</div>'+
+    '<div class="xp"><i style="width:'+st+'%" data-to="'+pc(x)+'"></i></div><small>'+(nx!=null?fmt(x)+' / '+fmt(nx)+' опыта · ур. '+(l+1)+' '+lvlReward(g,l+1):'Максимальный уровень · все здания ×1,1')+'</small></div></div>'}
+function animBars(o){setTimeout(()=>o.querySelectorAll('.xp i[data-to]').forEach(e=>e.style.width=e.dataset.to+'%'),60)}
+function showMenu(){
+  $('coach').innerHTML='';
+  const saved=load(),free=spTotal()-spUsed();
+  overlay('<div class="logo">Остро<em>вок</em></div><p>Застройте остров за восемь этапов — от стоянки до столицы. Каждую неделю выбирайте одно здание из трёх и ставьте его туда, где соседи дадут больше очков.</p>'+
+    rankHTML(PROF.fame)+
+    '<div class="meta"><span>⭐ Слава: '+fmt(PROF.fame)+'</span><span>🏝️ Забегов: '+PROF.runs+'</span><span>🏆 Лучший этап: '+(PROF.bestStage?stageName(PROF.bestStage-1):'—')+'</span></div>'+
+    (saved?'<button class="btn primary" id="mCont">Продолжить · '+stageName(saved.stage)+', '+saved.weeksLeft+' нед.</button>':'')+
+    '<button class="btn'+(saved?'':' primary')+'" id="mNew">Новый забег</button>'+
+    '<div class="btnrow"><button class="btn" id="mGuild">🛡️ Гильдии</button><button class="btn" id="mSkill">🌟 Навыки'+(free>0?' <span class="n">+'+free+'</span>':'')+'</button></div>'+
+    '<div class="btnrow"><button class="btn" id="mAch">🏆 Достижения</button><button class="btn" id="mTut">🎓 Обучение</button></div>'+
+    '<button class="btn plus" id="mPlus">⭐ Островок+ · без рекламы</button>'+
+    '<div class="btnrow"><button class="btn" id="mHelp">Как играть</button><button class="btn" id="mSnd">Звук: '+(ui.sound?'вкл':'выкл')+'</button></div>',o=>{
+    if(saved)o.querySelector('#mCont').onclick=()=>{S=fixSave(saved);ui.shown=S.score;R=rng((S.rngSeed+S.week*7919)>>>0);closeOverlay();buildTerrain();centerCamera();if(!S.offer.length)rollOffer();renderUI();audio();if(S.weeksLeft<=0)offerRevive()};
+    o.querySelector('#mNew').onclick=()=>{audio();pickGuilds()};
+    o.querySelector('#mGuild').onclick=()=>showGuilds(showMenu);
+    o.querySelector('#mSkill').onclick=()=>showSkills(showMenu);
+    o.querySelector('#mHelp').onclick=()=>showHelp(showMenu);
+    o.querySelector('#mAch').onclick=()=>showAch(showMenu);
+    o.querySelector('#mPlus').onclick=()=>showPlus(showMenu);
+    o.querySelector('#mTut').onclick=()=>{audio();if(saved)overlay('<h2>Начать обучение?</h2><p>Обучение начнёт новый забег, текущий сохранённый будет сброшен.</p><div class="btnrow"><button class="btn" id="tNo">Отмена</button><button class="btn primary" id="tYes">Начать</button></div>',q=>{q.querySelector('#tNo').onclick=showMenu;q.querySelector('#tYes').onclick=startTutorial});else startTutorial()};
+    o.querySelector('#mSnd').onclick=()=>{ui.sound=!ui.sound;PROF.sound=ui.sound;saveProfile();showMenu()}})}
+function showGuilds(back){
+  overlay('<h2>Прогресс гильдий</h2><p>Очки, которые приносят здания гильдии, становятся её опытом. Новый уровень открывает новое здание.</p>'+
+    Object.keys(GUILD).map(g=>guildHTML(g)).join('')+rankHTML(PROF.fame)+'<button class="btn primary" id="gOk">Готово</button>',
+    o=>o.querySelector('#gOk').onclick=back||showMenu)}
+function showSkills(back){
+  const draw=()=>{const tot=spTotal(),used=spUsed(),free=tot-used,rk=rankOf(PROF.fame)+1;
+    overlay('<h2>Навыки</h2><p>Очко навыков даётся за каждый новый ранг. Свободно: <b>'+free+'</b> из '+tot+'. Действуют со следующего забега.</p>'+rankHTML(PROF.fame)+
+      '<div class="skills">'+Object.keys(SKILLS).map(id=>{const d=SKILLS[id],lv=PROF.skills[id]||0,lock=rk<d.rank;
+        return '<div class="skill'+(lock?' locked':'')+'"><span class="em">'+d.em+'</span><span><strong>'+d.n+'</strong>'+d.t+(lock?'<br><b>Нужен ранг '+d.rank+' «'+RANKS[d.rank-1][0]+'»</b>':'')+'</span>'+
+          '<span class="pts"><span class="lv">'+Array.from({length:d.max},(_,i)=>'<i class="'+(i<lv?'on':'')+'"></i>').join('')+'</span>'+
+          '<button class="btn" data-id="'+id+'" aria-label="Улучшить '+d.n+'"'+(lock||lv>=d.max||free<1?' disabled':'')+'>+</button></span></div>'}).join('')+'</div>'+
+      '<div class="btnrow"><button class="btn" id="kReset"'+(used?'':' disabled')+'>Сбросить</button><button class="btn primary" id="kOk">Готово</button></div>',o=>{
+      o.querySelectorAll('.skill .btn').forEach(b=>b.onclick=()=>{const id=b.dataset.id;PROF.skills[id]=(PROF.skills[id]||0)+1;saveProfile();sfx('build');draw()});
+      o.querySelector('#kReset').onclick=()=>{PROF.skills={};saveProfile();sfx('click');draw()};
+      o.querySelector('#kOk').onclick=back||showMenu})};
+  draw()}
+function pickGuilds(){
+  const sel=[];
+  const draw=()=>overlay('<h2>Выберите две гильдии</h2><p>Здания на выбор будут приходить только из них. Уровень гильдии растёт от очков её зданий.</p><div class="guilds">'+
+    Object.keys(GUILD).map(g=>{const ok=gUnlocked(g);
+      if(!ok){const L=GLOCK[g];return '<button class="gcard" disabled style="border-top:6px solid #a39b8a"><strong>🔒 '+GUILD[g].name+'</strong><span class="lk">'+L.txt(L.need-L.cur())+'</span><div class="xp"><i style="width:'+Math.min(100,L.cur()/L.need*100)+'%"></i></div></button>'}
+      const l=gLevel(g),open=gOpen(g);
+      return '<button class="gcard'+(sel.includes(g)?' picked':'')+'" data-g="'+g+'" style="border-top:6px solid '+GUILD[g].color+'"><strong>'+GUILD[g].name+'</strong><div class="lv">'+[1,2,3,4,5].map(i=>'<i class="'+(i<=l?'on':'')+'"></i>').join('')+'</div><span class="ems">'+gBlds(g).map(k=>open.includes(k)?B[k].em:'<span style="opacity:.35">❔</span>').join('')+'</span>'+GUILD[g].d+(l>=5?' <b>Все здания ×1,1.</b>':'')+'</button>'}).join('')+
+    '</div><button class="btn primary" id="gGo"'+(sel.length===2?'':' disabled')+'>Начать'+(sel.length===2?': '+sel.map(g=>GUILD[g].name).join(' + '):'')+'</button><button class="btn" id="gBack">Назад</button>',o=>{
+    o.querySelectorAll('.gcard[data-g]').forEach(b=>b.onclick=()=>{const g=b.dataset.g,p=sel.indexOf(g);if(p>=0)sel.splice(p,1);else{if(sel.length===2)sel.shift();sel.push(g)}sfx('click');draw()});
+    o.querySelector('#gGo').onclick=()=>{clearSave();closeOverlay();if(!PROF.tut)ui.tut=0;newRun(sel.slice())};
+    o.querySelector('#gBack').onclick=showMenu});
+  draw();
+}
+function showHelp(after){PROF.help=true;saveProfile();
+  overlay('<h2>Как играть</h2><ul class="rules">'+
+  '<li><b>1</b><span>Одна неделя — один ход. Выберите здание внизу и нажмите на клетку.</span></li>'+
+  '<li><b>2</b><span>Жёлтая пунктирная рамка — всё на острове, от чего здание получает бонус. Сплошная — то, что попадёт в его радиус. Синим — соседи, которые станут приносить больше.</span></li>'+
+  '<li><b>3</b><span>Нажмите на ту же клетку ещё раз или кнопку «Построить». Здания приносят очки каждую неделю, поэтому ранние постройки окупаются дольше.</span></li>'+
+  '<li><b>4</b><span>Наберите цель этапа до конца недель. Каждые два этапа меняется сезон и усиливает одну гильдию.</span></li>'+
+  '<li><b>5</b><span>Между этапами — награда и лавка: реликвии работают весь забег, запасы — один раз.</span></li>'+
+  '<li><b>6</b><span>Цифры под зданиями — сколько каждое принесёт на следующей неделе (кнопка 🔢). Штриховка на полосе — прогноз до конца этапа.</span></li>'+
+  '<li><b>7</b><span>После забега растут ранг и гильдии: новые ранги дают очки навыков, уровни гильдий открывают здания, Торговля и Море открываются за достижения.</span></li>'+
+  '<li><b>8</b><span>Карта двигается пальцем и приближается двумя. Во время подсчёта нажмите на экран, чтобы ускорить.</span></li></ul>'+
+  '<button class="btn primary" id="hOk">Понятно</button>',o=>o.querySelector('#hOk').onclick=()=>{closeOverlay();if(typeof after==='function')after()})}
+
+const REWARDS=[
+  {id:'rr',em:'🎲',t:'+2 переброса',d:'Заменить три предложенных здания.',a:()=>S.rerolls+=2},
+  {id:'rm',em:'⛏️',t:'+2 сноса',d:'Убрать камень, дерево или здание.',a:()=>S.removes+=2},
+  {id:'cn',em:'💰',t:'+6 монет',d:'Потратить в лавке.',a:()=>addCoins(6)},
+  {id:'up',em:'⭐',t:'Улучшение',d:'Самое доходное здание без звезды приносит ×1,5.',a:()=>{let bi=-1,bp=-1;for(let i=0;i<W*H;i++){const o=S.obj[i];if(o&&B[o.k]&&!o.up){const p=weekly(S,i,S.week+1).pts;if(p>bp){bp=p;bi=i}}}if(bi>=0){S.obj[bi].up=1;floatAt(bi,'×1,5','#ffd34d')}}},
+  {id:'tr',em:'🌲',t:'Молодой лес',d:'4 дерева на свободном лугу.',a:()=>plant(S,-1,R,4,'tree').forEach(dust)},
+  {id:'fl',em:'🌼',t:'Цветущий луг',d:'4 цветка на свободном лугу.',a:()=>plant(S,-1,R,4,'flower').forEach(dust)}
+];
+function showReward(){
+  const bonus=5+S.weeksLeft+(S.relics.includes('map')?3:0);addCoins(bonus);
+  const p=REWARDS.slice(),pick=[];while(pick.length<3)pick.push(p.splice((R()*p.length)|0,1)[0]);
+  overlay('<h2>'+stageName(S.stage)+' построен!</h2><p>Цель '+fmt(goalOf(S.stage))+' за '+(weeksPer()-S.weeksLeft)+' нед. Получено '+bonus+' 💰. Выберите награду.</p><div class="choices">'+
+    pick.map(r=>'<button class="choice" data-id="'+r.id+'"><span class="em">'+r.em+'</span><span><strong>'+r.t+'</strong>'+r.d+'</span></button>').join('')+'</div>',
+    o=>o.querySelectorAll('.choice').forEach(b=>b.onclick=()=>{REWARDS.find(x=>x.id===b.dataset.id).a();sfx('click');showShop(true)}));
+}
+let shopStock=null;const price=d=>Math.max(1,d.p-sk('trader'));
+function rollShop(){const rel=Object.keys(RELICS).filter(r=>!S.relics.includes(r)),con=Object.keys(CONS),out=[];
+  for(let n=0;n<2&&rel.length;n++)out.push({type:'r',id:rel.splice((R()*rel.length)|0,1)[0]});
+  for(let n=0;n<2;n++)out.push({type:'c',id:con[(R()*con.length)|0]});return out}
+function showShop(fresh){
+  if(fresh)shopStock=rollShop();
+  overlay('<h2>Лавка</h2><p>У вас '+S.coins+' 💰. Реликвий можно держать до 4, запасов — до 3.</p><div class="choices">'+
+    shopStock.map((it,n)=>{const d=it.type==='r'?RELICS[it.id]:CONS[it.id],full=it.type==='r'?S.relics.length>=4:S.cons.length>=3;
+      return '<button class="choice" data-n="'+n+'"'+(it.sold||S.coins<price(d)||full?' disabled':'')+'><span class="em">'+d.em+'</span><span><strong>'+d.n+(it.sold?' · куплено':'')+'</strong>'+(it.type==='r'?'Реликвия. ':'Запас. ')+d.t+'</span><span class="price">'+price(d)+' 💰</span></button>'}).join('')+
+    '</div>'+(shopStock.ad?'':'<button class="btn" id="sAd">'+(PROF.premium?'⭐':'📺')+' +3 💰 за рекламу</button>')+'<div class="btnrow"><button class="btn" id="sRe"'+(S.coins<1?' disabled':'')+'>Обновить · 1 💰</button><button class="btn primary" id="sGo">Дальше: '+stageName(S.stage+1)+'</button></div>',o=>{
+    o.querySelectorAll('.choice').forEach(b=>b.onclick=()=>{const it=shopStock[+b.dataset.n],d=it.type==='r'?RELICS[it.id]:CONS[it.id];if(S.coins<price(d))return;S.coins-=price(d);it.sold=true;(it.type==='r'?S.relics:S.cons).push(it.id);if(S.relics.length>=4)ach('relics');sfx('build');renderUI();showShop(false)});
+    o.querySelector('#sRe').onclick=()=>{if(S.coins<1)return;S.coins--;showShop(true);renderUI()};
+    o.querySelector('#sGo').onclick=()=>nextStage();
+    const ad=o.querySelector('#sAd');if(ad)ad.onclick=()=>watchAd('+3 💰',()=>{shopStock.ad=true;addCoins(3);renderUI();showShop(false)})})}
+function unlockSnap(){const o={g:[],b:[],r:rankOf(PROF.fame),m:[]};
+  for(const g in GUILD){if(!gUnlocked(g))continue;o.g.push(g);o.b.push(...gOpen(g));if(gLevel(g)>=5)o.m.push(g)}return o}
+function unlockDiff(a,b){const out=[];
+  b.g.filter(g=>!a.g.includes(g)).forEach(g=>out.push({em:GEM[g],h:'Гильдия «'+GUILD[g].name+'»',tag:'Новая гильдия',col:GUILD[g].color,t:GUILD[g].d+'<br><br>Сразу доступны: '+gOpen(g).map(k=>B[k].em+' '+B[k].n).join(', ')+'.'}));
+  b.b.filter(k=>!a.b.includes(k)&&a.g.includes(B[k].g)).forEach(k=>out.push({em:B[k].em,h:B[k].n,tag:GUILD[B[k].g].name,col:GUILD[B[k].g].color,t:B[k].t}));
+  b.m.filter(g=>!a.m.includes(g)).forEach(g=>out.push({em:'🏅',h:'Мастера: '+GUILD[g].name,tag:'Уровень 5',col:GUILD[g].color,t:'Все здания этой гильдии теперь приносят ×1,1 очков.'}));
+  for(let r=a.r+1;r<=b.r;r++)out.push({em:'👑',h:'Ранг «'+RANKS[r][0]+'»',tag:'Новый ранг',col:'#7a4a24',t:'+1 очко навыков. Потратьте его в меню → «Навыки».'});
+  return out}
+function showUnlocks(list,done){let n=0;
+  const step=()=>{if(n>=list.length)return done();const u=list[n];sfx('stage');
+    overlay('<h2 style="text-align:center">Новое открыто</h2><div class="unl"><div class="big">'+u.em+'</div><h3>'+u.h+'</h3><span class="tag" style="align-self:center;background:'+u.col+'">'+u.tag+'</span><p>'+u.t+'</p></div>'+
+      (list.length>1?'<div class="dots">'+list.map((_,i)=>'<i class="'+(i===n?'on':'')+'"></i>').join('')+'</div>':'')+'<button class="btn primary" id="uNext">Далее</button>',o=>o.querySelector('#uNext').onclick=()=>{n++;step()})};
+  step()}
+function endRun(quit){
+  sfx('lose');clearSave();
+  const before=unlockSnap(),rows=[];
+  for(let s=0;s<S.stage;s++)rows.push(['Этап «'+stageName(s)+'»',10+5*s]);
+  const bw=Math.round(S.best/50);if(bw)rows.push(['Лучшая неделя · '+fmt(S.best),bw]);
+  const bb=Math.floor(S.built/5);if(bb)rows.push(['Построено зданий · '+S.built,bb]);
+  const fame=rows.reduce((a,r)=>a+r[1],0),fame0=PROF.fame,gx0={};
+  PROF.fame+=fame;PROF.runs++;PROF.bestStage=Math.max(PROF.bestStage,S.stage+1);PROF.totalBuilt+=S.built;PROF.coinsEarned+=S.earned||0;
+  S.guilds.forEach(g=>{gx0[g]=PROF.gxp[g]||0;PROF.gxp[g]=gx0[g]+((S.gpts||{})[g]||0)});
+  if(PROF.runs>=10)ach('runs10');if(Object.keys(GUILD).some(g=>gLevel(g)>=5))ach('guild5');if(rankOf(PROF.fame)>=4)ach('rank5');
+  ui.tut=-1;saveProfile();renderUI();
+  const news=unlockDiff(before,unlockSnap());
+  overlay('<h2>'+(quit?'Забег завершён':'Недели закончились')+'</h2><p>До цели «'+stageName(S.stage)+'» не хватило '+fmt(goalOf(S.stage)-S.score)+' очков.</p>'+
+    '<div class="score">'+(rows.length?rows.map(r=>'<div><span>'+r[0]+'</span><b>+'+r[1]+' ⭐</b></div>').join(''):'<div><span>Этапы не пройдены</span><b>0</b></div>')+'<div class="tot"><span>Слава за забег</span><span>'+fame+' ⭐</span></div></div>'+
+    rankHTML(PROF.fame,fame0)+S.guilds.map(g=>guildHTML(g,gx0[g])).join('')+
+    '<div class="stats"><div class="stat"><span>Дошли до</span><b>'+stageName(S.stage)+'</b></div><div class="stat"><span>Всего очков</span><b>'+fmt(S.total)+'</b></div><div class="stat"><span>Лучшая неделя</span><b>'+fmt(S.best)+'</b></div><div class="stat"><span>Построено</span><b>'+S.built+'</b></div></div>'+
+    (news.length?'<button class="btn primary" id="lNext">Далее · новое: '+news.length+'</button>':'<button class="btn primary" id="lNew">Новый забег</button><button class="btn" id="lMenu">В меню</button>'),o=>{
+    animBars(o);
+    if(news.length)o.querySelector('#lNext').onclick=()=>showUnlocks(news,showMenu);
+    else{o.querySelector('#lNew').onclick=pickGuilds;o.querySelector('#lMenu').onclick=showMenu}})}
+
+// =============== INPUT ===============
+const ptrs=new Map();let gest=null;
+cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);audio();ptrs.set(e.pointerId,{x:e.offsetX,y:e.offsetY,sx:e.offsetX,sy:e.offsetY,t:performance.now()});
+  if(ptrs.size===2){const [a,b]=[...ptrs.values()];gest={pinch:true,d:Math.hypot(a.x-b.x,a.y-b.y)||1,s:cam.s,cx:(a.x+b.x)/2,cy:(a.y+b.y)/2,ox:cam.x,oy:cam.y}}else gest={ox:cam.x,oy:cam.y,moved:false}});
+cv.addEventListener('pointermove',e=>{const p=ptrs.get(e.pointerId);
+  if(!p){if(e.pointerType==='mouse'&&ui.sel>=0&&!ui.busy){const t=tileAt(e.offsetX,e.offsetY);if(t!==ui.cursor){ui.cursor=t;renderUI()}}return}
+  p.x=e.offsetX;p.y=e.offsetY;
+  if(gest&&gest.pinch&&ptrs.size>=2){const [a,b]=[...ptrs.values()];zoomTo(gest.s*Math.hypot(a.x-b.x,a.y-b.y)/gest.d,gest);return}
+  if(gest&&!gest.pinch){const dx=p.x-p.sx,dy=p.y-p.sy;if(Math.hypot(dx,dy)>8)gest.moved=true;if(gest.moved){cam.x=gest.ox+dx;cam.y=gest.oy+dy;clampCam()}}});
+function endP(e){const p=ptrs.get(e.pointerId);ptrs.delete(e.pointerId);if(!p)return;if(gest&&gest.pinch){if(!ptrs.size)gest=null;return}
+  if(gest&&!gest.moved&&performance.now()-p.t<500)tap(p.x,p.y);if(!ptrs.size)gest=null}
+cv.addEventListener('pointerup',endP);cv.addEventListener('pointercancel',endP);
+cv.addEventListener('wheel',e=>{e.preventDefault();const [wx,wy]=toWorld(e.offsetX,e.offsetY);zoomTo(cam.s*(e.deltaY<0?1.12:1/1.12),{cx:e.offsetX,cy:e.offsetY,ox:cam.x,oy:cam.y,s:cam.s})},{passive:false});
+function zoomTo(ns,g){const min=Math.min(vw/(W*T),vh/(H*T))*.9,max=min*3.4;ns=Math.max(min,Math.min(max,ns));const wx=(g.cx-g.ox)/g.s,wy=(g.cy-g.oy)/g.s;cam.s=ns;cam.x=g.cx-wx*ns;cam.y=g.cy-wy*ns;clampCam()}
+function clampCam(){const mw=W*T*cam.s,mh=H*T*cam.s,pad=60;cam.x=mw<vw?(vw-mw)/2:Math.min(pad,Math.max(vw-mw-pad,cam.x));cam.y=mh<vh?(vh-mh)/2:Math.min(pad,Math.max(vh-mh-pad,cam.y))}
+function numBtn(){$('zNum').classList.toggle('on',ui.nums)}numBtn();
+$('zNum').onclick=()=>{ui.nums=!ui.nums;PROF.nums=ui.nums;saveProfile();numBtn();sfx('click')};
+$('zIn').onclick=()=>zoomTo(cam.s*1.25,{cx:vw/2,cy:vh/2,ox:cam.x,oy:cam.y,s:cam.s});
+$('zOut').onclick=()=>zoomTo(cam.s/1.25,{cx:vw/2,cy:vh/2,ox:cam.x,oy:cam.y,s:cam.s});
+function tap(x,y){if(!S)return;if(ui.busy){ui.fast=true;renderUI();return}
+  const t=tileAt(x,y);if(t<0)return;
+  if(ui.removing){if(S.obj[t]&&S.removes>0){S.removes--;S.obj[t]=null;ui.removing=false;dust(t);sfx('build');floatAt(t,'снесено','#ffd34d');save();renderUI()}return}
+  if(ui.sel>=0){if(ui.cursor===t&&canPlace(S,S.offer[ui.sel],t))return place();ui.cursor=t;sfx('click');renderUI();return}
+  const o=S.obj[t];if(o&&B[o.k])showTip(o.k)}
+document.addEventListener('keydown',e=>{if(e.key===' '&&ui.busy){ui.fast=true;renderUI();e.preventDefault()}if(e.key==='Escape'){ui.sel=-1;ui.cursor=-1;ui.removing=false;renderUI()}});
+
+// =============== BOOT ===============
+new ResizeObserver(()=>{resize();if(S)clampCam()}).observe(wrap);resize();requestAnimationFrame(loop);
+window.claude?.hot?.snapshot?.(()=>({S}));
+const boot=d=>{if(d&&d.S&&d.S.v===2){S=fixSave(d.S);ui.shown=S.score;R=rng((S.rngSeed+S.week*7919)>>>0);buildTerrain();centerCamera();renderUI()}else showMenu()};
+window.claude?.hot?.ready?window.claude.hot.ready(boot):boot(window.claude?.hot?.data??{});
+})();
+</script>
+</body></html>
